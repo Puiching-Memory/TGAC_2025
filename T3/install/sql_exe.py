@@ -66,7 +66,7 @@ class execute_sql_with_pymysql:
             cursor = conn.cursor(pymysql.cursors.DictCursor)
 
             # 2. 读取输入 JSON 文件
-            sql_list = json.loads(Path(input_file_path).read_text())
+            sql_list = json.loads(Path(input_file_path).read_text(encoding='utf-8'))
                 
             # 验证输入数据格式是否正确
             if not isinstance(sql_list, list):
@@ -127,7 +127,10 @@ class execute_sql_with_pymysql:
             # 引入 pathlib 处理路径
             output_path = Path(output_file_path)
             output_path.parent.mkdir(parents=True, exist_ok=True) # 确保父级目录已经存在
-            output_path.write_text(json.dumps(results, ensure_ascii = False, indent = 4, cls = DecimalEncoder)) # 写入文件
+            output_path.write_text(
+                json.dumps(results, ensure_ascii = False, indent = 4, cls = DecimalEncoder),
+                encoding='utf-8'
+            ) # 写入文件
             print(f"执行结果已成功保存到 {output_file_path}")
         except Exception as e:
             # 捕获文件写入过程中可能发生的其他异常（如权限不足等）
@@ -154,7 +157,7 @@ class execute_sql_with_pymysql:
             cursor = conn.cursor(pymysql.cursors.DictCursor)
 
             # 2. 读取输入 JSON 文件
-            sql_list = json.loads(Path(input_file_path).read_text())
+            sql_list = json.loads(Path(input_file_path).read_text(encoding='utf-8'))
             
             # 验证输入数据格式
             if not isinstance(sql_list, list):
@@ -212,7 +215,10 @@ class execute_sql_with_pymysql:
             # 引入 pathlib 处理路径
             output_path = Path(output_file_path)
             output_path.parent.mkdir(parents=True, exist_ok=True) # 确保父级目录已经存在
-            output_path.write_text(json.dumps(results, ensure_ascii = False, indent = 4)) # 写入文件
+            output_path.write_text(
+                json.dumps(results, ensure_ascii = False, indent = 4),
+                encoding='utf-8'
+            ) # 写入文件
             print(f"执行结果已成功保存到 {output_file_path}")
         except Exception as e:
             # 捕获文件写入过程中可能发生的其他异常（如权限不足等）
@@ -262,17 +268,17 @@ if __name__ == '__main__':
     db_configuration = {
         'host': '127.0.0.1',      # 数据库主机地址
         'user': 'root',      # 数据库用户名
-        'password': 'Tencent.tgac', # 数据库密码
-        'db': 'final_algorithm_competition', # 数据库名称
+        #'password': 'Tencent.tgac', # 数据库密码
+        'db': 'database_main', # 数据库名称
         'port': 9030 # starrocks访问端口
     }
 
     # 执行插入操作
-    insert_file_path = "/root/算法大赛/final/data/insert_sql_with_mapping.json"
-    insert_result_file_path = "/root/算法大赛/final/result/insert_exe_result.json"
+    insert_file_path = "T3/data/insert_sql.json"
+    insert_result_file_path = "T3/data/insert_exe_result.json"
     sql_executor.insert_data_with_pymysql(insert_file_path, insert_result_file_path, db_configuration)
     
     # 执行查询操作
-    dataset_file_path = "/root/算法大赛/final/data/final_dataset_with_mapping.json"
-    dataset_result_file_path = "/root/算法大赛/final/result/dataset_exe_result.json"
+    dataset_file_path = "T3/data/final_dataset.json"
+    dataset_result_file_path = "T3/data/dataset_exe_result.json"
     sql_executor.execute_sql_with_pymysql(dataset_file_path, dataset_result_file_path, db_config = db_configuration)
