@@ -274,9 +274,9 @@ if __name__ == '__main__':
     }
 
     # 执行插入操作
-    insert_file_path = "T3/data/insert_sql.json"
-    insert_result_file_path = "T3/data/insert_exe_result.json"
-    sql_executor.insert_data_with_pymysql(insert_file_path, insert_result_file_path, db_configuration)
+    #insert_file_path = "T3/data/insert_sql.json"
+    #insert_result_file_path = "T3/data/insert_exe_result.json"
+    #sql_executor.insert_data_with_pymysql(insert_file_path, insert_result_file_path, db_configuration)
     
     # 执行查询操作
     dataset_file_path = "T3/data/final_dataset.json"
