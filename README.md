@@ -1,42 +1,5 @@
 # 2025_TGAC
 
-## 环境
+## 赛道3：数智决策科学
 
-CUDA 12.8.1 ubuntu 24 H800 * 8 sm90
-
-```bash
-apt update
-apt upgrade
-apt install git wget curl libxml2 build-essential htop nvtop iputils-ping
-
-bash cuda_12.8.1_570.124.06_linux.run
-
-curl -LsSf https://astral.sh/uv/install.sh | sh
-
-wget https://gitee.com/RubyMetric/chsrc/releases/download/pre/chsrc_latest-1_amd64.deb
-apt install ./chsrc_latest-1_amd64.deb
-chsrc set uv
-
-uv venv --python 3.13 --seed
-source .venv/bin/activate
-uv pip install vllm --torch-backend=auto
-
-export CUDA_VISIBLE_DEVICES=3
-vllm serve Qwen/Qwen3-0.6B --dtype auto --gpu-memory-utilization 0.1 --max-model-len 4096 --port 8800 --host 0.0.0.0
-vllm serve Qwen/Qwen3-4B-Thinking-2507 --dtype auto --gpu-memory-utilization 0.2 --max-model-len 8192 --port 8800 --host 0.0.0.0 # 糟糕的指令遵从性
-vllm serve Qwen/Qwen3-4B-Instruct-2507-FP8 --dtype auto --gpu-memory-utilization 0.2 --max-model-len 8192 --port 8800 --host 0.0.0.0
-vllm serve Qwen/Qwen3-Coder-30B-A3B-Instruct-FP8 --dtype auto --gpu-memory-utilization 0.2 --max-model-len 8192 --port 8800 --host 0.0.0.0
-```
-
-.bashrc
-```bash
-export http_proxy=http://localhost:7897
-export https_proxy=http://localhost:7897
-
-export PATH=/usr/local/cuda-12.8/bin:$PATH
-export LD_LIBRARY_PATH=/usr/local/cuda-12.8/lib64:$LD_LIBRARY_PATH
-
-. "$HOME/.local/bin/env"
-
-export HF_ENDPOINT=https://hf-mirror.com
-```
+see: [T3/upload/方案介绍.md](T3/upload/%E6%96%B9%E6%A1%88%E4%BB%8B%E7%BB%8D.md)
