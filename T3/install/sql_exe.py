@@ -268,15 +268,15 @@ if __name__ == '__main__':
     db_configuration = {
         'host': '127.0.0.1',      # 数据库主机地址
         'user': 'root',      # 数据库用户名
-        'password': 'password', # 数据库密码
+        'password': '', # 数据库密码
         'db': 'database_main', # 数据库名称
         'port': 9030 # starrocks访问端口
     }
 
     # 执行插入操作
-    #insert_file_path = "T3/data/insert_sql.json"
-    #insert_result_file_path = "T3/data/insert_exe_result.json"
-    #sql_executor.insert_data_with_pymysql(insert_file_path, insert_result_file_path, db_configuration)
+    insert_file_path = "T3/data/insert_sql.json"
+    insert_result_file_path = "T3/data/insert_exe_result.json"
+    sql_executor.insert_data_with_pymysql(insert_file_path, insert_result_file_path, db_configuration)
     
     # 执行查询操作
     dataset_file_path = "T3/data/final_dataset.json"
