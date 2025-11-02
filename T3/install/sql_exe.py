@@ -268,7 +268,7 @@ if __name__ == '__main__':
     db_configuration = {
         'host': '127.0.0.1',      # 数据库主机地址
         'user': 'root',      # 数据库用户名
-        #'password': 'Tencent.tgac', # 数据库密码
+        'password': 'password', # 数据库密码
         'db': 'database_main', # 数据库名称
         'port': 9030 # starrocks访问端口
     }
