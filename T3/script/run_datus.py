@@ -1,55 +1,32 @@
-"""Utility script to run datus tasks generated from the final dataset.
-The script is intentionally simple: adjust the constants below to match
-local paths or namespaces before execution.
-"""
+"""Script to batch process text2sql tasks with user authentication."""
 
 import json
 from pathlib import Path
-from typing import Any, Dict, Iterable
+from typing import Any, Dict, List
 
 import requests
 
-# Path configuration (update as needed)
-DATASET_PATH = Path(__file__).resolve().parents[1] / "data" / "final_dataset.json"
+# Configuration
+BASE_DIR = Path(__file__).resolve().parents[1]
+DATASET_PATH = BASE_DIR / "data" / "final_dataset.json"
+COMMON_KNOWLEDGE_PATH = BASE_DIR / "data" / "common_knowledge.md"
+OUTPUT_PATH = BASE_DIR / "upload" / "dataset_exe_result.json"
 API_URL = "http://localhost:6080/workflows/run"
 TOKEN_URL = "http://localhost:6080/auth/token"
+
 CLIENT_ID = "your_client_id"
 CLIENT_SECRET = "client"
 WORKFLOW_NAME = "reflection"
 NAMESPACE = "game"
-OUTPUT_PATH = Path(__file__).resolve().parents[1] / "upload" / "dataset_exe_result.json"
 
 _ACCESS_TOKEN: str | None = None
 
 
-def load_dataset(path: Path) -> Iterable[Dict[str, Any]]:
-    """Load dataset entries from JSON."""
-    with path.open("r", encoding="utf-8") as handle:
-        return json.load(handle)
-
-
-def build_task_payload(entry: Dict[str, Any]) -> str:
-    """Create a structured payload string for the workflow service."""
-
-    sql_id = entry.get("sql_id")
-    question = entry.get("question","")
-    tables = entry.get("table_list", [])
-    knowledge = entry.get("knowledge", "")
-
-    return f"{question} table_names: {tables} knowledge: {knowledge}"
-
-
-def get_access_token() -> str:
-    """Retrieve an OAuth2 access token via the client credentials flow."""
+def authenticate() -> str:
+    """Retrieve OAuth2 access token via client credentials flow."""
     global _ACCESS_TOKEN
     if _ACCESS_TOKEN:
         return _ACCESS_TOKEN
-
-    if not CLIENT_ID or not CLIENT_SECRET:
-        raise RuntimeError(
-            "DATUS_CLIENT_ID or DATUS_CLIENT_SECRET is not set. Provide OAuth2 client "
-            "credentials via environment variables and rerun the script."
-        )
 
     response = requests.post(
         TOKEN_URL,
@@ -60,28 +37,38 @@ def get_access_token() -> str:
         },
         timeout=30,
     )
-    try:
-        response.raise_for_status()
-    except requests.HTTPError as exc:
-        raise RuntimeError(
-            "Failed to obtain access token. Check CLIENT_ID/CLIENT_SECRET and server auth_clients.yml."
-            f" Response: {exc.response.text}"
-        ) from exc
+    response.raise_for_status()
     token_payload = response.json()
-    access_token = token_payload.get("access_token")
-    if not access_token:
-        raise RuntimeError("Token endpoint response missing 'access_token'.")
-    _ACCESS_TOKEN = access_token
-    return access_token
+    _ACCESS_TOKEN = token_payload.get("access_token")
+    return _ACCESS_TOKEN
 
 
-def run_task(task_payload: str) -> Dict[str, Any]:
-    """Send the task to the workflow service."""
-    headers = {"Authorization": f"Bearer {get_access_token()}"}
+def build_prompt(entry: Dict[str, Any]) -> str:
+    """Build prompt engineering input from dataset entry."""
+    question = entry.get("question", "")
+    tables = entry.get("table_list", [])
+    knowledge = entry.get("knowledge", "")
+    common_knowledge = COMMON_KNOWLEDGE_PATH.read_text(encoding="utf-8")
+
+    db_info = "SQL数据库: StarRocks 3.5.7 (MySQL方言)"
+
+    parts = [
+        question.strip(),
+        f"表名: {tables}",
+        f"业务知识: {knowledge}",
+        f"数据库信息: {db_info}",
+        f"通用知识库: {common_knowledge}",
+    ]
+    return "\n\n".join(parts)
+
+
+def run_text2sql_task(prompt: str) -> Dict[str, Any]:
+    """Send text2sql task to workflow service."""
+    headers = {"Authorization": f"Bearer {authenticate()}"}
     payload = {
         "workflow": WORKFLOW_NAME,
         "namespace": NAMESPACE,
-        "task": task_payload,
+        "task": prompt,
         "mode": "sync",
     }
     response = requests.post(API_URL, headers=headers, json=payload, timeout=120)
@@ -89,36 +76,45 @@ def run_task(task_payload: str) -> Dict[str, Any]:
     return response.json()
 
 
-def main() -> None:
-    dataset = load_dataset(DATASET_PATH)
-    execution_results: list[Dict[str, Any]] = []
+def batch_process(dataset: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Process dataset entries in batch."""
+    results = []
     for entry in dataset:
         sql_id = entry.get("sql_id", "<unknown>")
-        task_payload = build_task_payload(entry=entry)
-        print(f"Running task for {sql_id}...")
-        try:
-            result = run_task(task_payload)
-        except requests.HTTPError as exc:
-            print(f"request failed for {sql_id}: {exc.response.text}")
-            raise
-        except requests.RequestException as exc:
-            print(f"request error for {sql_id}: {exc}")
-            raise
+        print(f"Processing {sql_id}...")
+
+        prompt = build_prompt(entry)
+        result = run_text2sql_task(prompt)
+
         sql_text = result.get("sql")
         query_result = result.get("result")
-        print(sql_text)
-        print(query_result)
-        execution_results.append(
-            {
-                "sql_id": sql_id,
-                "sql": sql_text,
-                "result": query_result,
-            }
-        )
 
+        print(f"  SQL: {sql_text}")
+        print(f"  Result: {query_result}\n")
+
+        results.append({
+            "sql_id": sql_id,
+            "sql": sql_text,
+            "result": query_result,
+        })
+
+    return results
+
+
+def export_results(results: List[Dict[str, Any]]) -> None:
+    """Export task results to JSON file."""
     OUTPUT_PATH.parent.mkdir(parents=True, exist_ok=True)
     with OUTPUT_PATH.open("w", encoding="utf-8") as handle:
-        json.dump(execution_results, handle, ensure_ascii=False, indent=4)
+        json.dump(results, handle, ensure_ascii=False, indent=4)
+    print(f"Results exported to {OUTPUT_PATH}")
+
+
+def main() -> None:
+    with DATASET_PATH.open("r", encoding="utf-8") as handle:
+        dataset = json.load(handle)
+
+    results = batch_process(dataset)
+    export_results(results)
 
 
 if __name__ == "__main__":

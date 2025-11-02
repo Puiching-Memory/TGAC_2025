@@ -1,4 +1,7 @@
 chsrc_latest-1_amd64.deb
 __pycache__/
 
+save/
+output/
+
 dataset_exe_result.json

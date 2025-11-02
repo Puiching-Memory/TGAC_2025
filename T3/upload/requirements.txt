@@ -1,3 +1,4 @@
 pymysql
 xlwings
 python-toon
+datus-agent
