@@ -64,8 +64,8 @@ DATABASE_VERSION = "4.0.0"  # 数据库版本
 DATABASE_TYPE = "StarRocks"  # 数据库型号
 
 # API 请求超时时间（秒）
-AUTH_TIMEOUT = 30
-WORKFLOW_TIMEOUT = 120
+AUTH_TIMEOUT = 40
+WORKFLOW_TIMEOUT = 300
 
 # 缓存（全局状态）
 _ACCESS_TOKEN: str | None = None
@@ -443,7 +443,7 @@ def build_prompt_payload(entry: Dict[str, Any], golden_examples: Optional[List[G
     )
 
 
-def run_text2sql_task(request: TaskRequest) -> Dict[str, Any]:
+def run_text2sql_task(request: TaskRequest) -> Optional[Dict[str, Any]]:
     """调用 workflow 服务执行 Text2SQL 任务。
     
     将 TaskRequest 对象转换为字典后使用 toon 编码，然后：
@@ -455,39 +455,42 @@ def run_text2sql_task(request: TaskRequest) -> Dict[str, Any]:
         request: 包含完整上下文的 TaskRequest 对象
         
     Returns:
-        服务返回的 JSON 响应，包含 sql 和 result 字段
-        
-    Raises:
-        requests.exceptions.RequestException: API 请求失败时抛出
+        服务返回的 JSON 响应，包含 sql 和 result 字段；超时或错误时返回 None
     """
-    headers = {"Authorization": f"Bearer {authenticate()}"}
-    
-    # 将 TaskRequest 转换为字典
-    request_dict = asdict(request)
-    
-    # 使用 toon 编码整个请求
-    toon_encoded_request = toon_encode(request_dict, {"indent": 2})
-    
-    # 打印编码后的请求信息
-    print_block("POST 信息 (toon 编码)", toon_encoded_request)
-    
-    # 发送时将已编码的字符串作为 JSON 传输
-    payload = {
-        "workflow": toon_encode(request.workflow),
-        "namespace": toon_encode(request.namespace),
-        "task": toon_encode(asdict(request.task), {"indent": 2}),
-        "mode": toon_encode(request.mode),
-    }
+    try:
+        headers = {"Authorization": f"Bearer {authenticate()}"}
+        
+        # 将 TaskRequest 转换为字典
+        request_dict = asdict(request)
+        
+        # 使用 toon 编码整个请求
+        toon_encoded_request = toon_encode(request_dict, {"indent": 2})
+        
+        # 打印编码后的请求信息
+        print_block("POST 信息 (toon 编码)", toon_encoded_request)
+        
+        # 发送时将已编码的字符串作为 JSON 传输
+        payload = {
+            "workflow": toon_encode(request.workflow),
+            "namespace": toon_encode(request.namespace),
+            "task": toon_encode(asdict(request.task), {"indent": 2}),
+            "mode": toon_encode(request.mode),
+        }
 
-    response = requests.post(API_URL, headers=headers, json=payload, timeout=WORKFLOW_TIMEOUT)
-    if not response.ok:
-        try:
-            error_preview = response.json()
-        except ValueError:
-            error_preview = response.text
-        print_block("请求失败", json.dumps(error_preview, ensure_ascii=False, indent=2))
-    response.raise_for_status()
-    return response.json()
+        response = requests.post(API_URL, headers=headers, json=payload, timeout=WORKFLOW_TIMEOUT)
+        if not response.ok:
+            error_preview = response.json() if response.text else response.text
+            print_block("请求失败", json.dumps(error_preview, ensure_ascii=False, indent=2))
+        response.raise_for_status()
+        return response.json()
+    
+    except (requests.exceptions.Timeout, requests.exceptions.ConnectionError, requests.exceptions.RequestException) as e:
+        error_type = type(e).__name__
+        print_block(
+            f"❌ 请求异常: {error_type}",
+            f"错误详情：{str(e)}\n将此任务当作 null 处理并继续执行"
+        )
+        return None
 
 
 def process_single_task(
@@ -505,7 +508,7 @@ def process_single_task(
         golden_examples: 标准答案示例列表（可选）
         
     Returns:
-        任务执行结果
+        任务执行结果。如果请求超时或失败，返回包含 None 值的 TaskResult
     """
     sql_id = entry.get("sql_id", "<unknown>")
     task_prompt = build_prompt_payload(entry, golden_examples)
@@ -531,6 +534,18 @@ def process_single_task(
         mode="sync",
     )
     result = run_text2sql_task(request)
+
+    # 如果请求失败或超时，result 为 None
+    if result is None:
+        print_block(
+            "任务结果",
+            color_text(
+                "超时或网络错误，将此任务记录为失败",
+                color=Fore.YELLOW,
+                style=Style.BRIGHT
+            )
+        )
+        return TaskResult(sql_id=sql_id, sql=None, result=None)
 
     sql_text = result.get("sql")
     query_result = result.get("result")
