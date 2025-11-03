@@ -17,6 +17,35 @@ from typing import Any, Dict, List, Optional
 import requests
 from toon import encode as toon_encode
 
+try:  # Optional dependency for colored console output
+    from colorama import Fore, Style, init as colorama_init
+except ImportError:  # pragma: no cover - colorama is optional
+    COLORAMA_AVAILABLE = False
+
+    class _ColorFallback:
+        def __getattr__(self, _name: str) -> str:  # noqa: D401
+            return ""
+
+    Fore = Style = _ColorFallback()  # type: ignore
+else:
+    colorama_init(autoreset=True)
+    COLORAMA_AVAILABLE = True
+
+
+def color_text(text: str, *, color: Optional[str] = None, style: Optional[str] = None) -> str:
+    """Apply ANSI coloring when colorama is available."""
+    if not COLORAMA_AVAILABLE:
+        return text
+
+    segments: List[str] = []
+    if color:
+        segments.append(color)
+    if style:
+        segments.append(style)
+    segments.append(text)
+    segments.append(Style.RESET_ALL)
+    return "".join(segments)
+
 
 # ============================================================================
 # 配置常量
@@ -88,18 +117,10 @@ def print_block(title: str, content: str) -> None:
         title: 信息块的标题
         content: 信息块的内容
     """
-    print(f"\n[{title}]")
-    print(content)
-
-
-def dump_compact_json(data: Any) -> Optional[str]:
-    """将数据序列化为单行紧凑 JSON 字符串。"""
-    if data is None:
-        return None
-    if isinstance(data, (list, dict)) and not data:
-        return None
-    return json.dumps(data, ensure_ascii=False, separators=(",", ":"))
-
+    colored_title = color_text(title, color=Fore.CYAN, style=Style.BRIGHT)
+    processed_content = content.replace("\\n", "\n")
+    print(f"\n[{colored_title}]")
+    print(color_text(processed_content, color=Fore.WHITE))
 
 def get_schema_cache() -> Dict[str, Dict[str, Any]]:
     """加载并缓存数据库 schema 定义。
@@ -214,22 +235,8 @@ def get_common_knowledge() -> str:
     return _COMMON_KNOWLEDGE_CACHE
 
 
-def format_knowledge_blob(knowledge_blob: Dict[str, Any]) -> Optional[str]:
-    """将知识字典转换为 JSON 字符串。
-    
-    使用单行紧凑格式（无换行符），便于 API 处理。
-    
-    Args:
-        knowledge_blob: 包含公共和业务知识的字典
-        
-    Returns:
-        格式化后的 JSON 字符串（单行格式），如果输入为空则返回 None
-    """
-    return dump_compact_json(knowledge_blob)
-
-
-def build_prompt_payload(entry: Dict[str, Any]) -> Dict[str, Any]:
-    """为 API 构建提示词、schema 和知识的负载。
+def build_prompt_payload(entry: Dict[str, Any], golden_examples: Optional[List[Dict[str, Any]]] = None) -> Dict[str, Any]:
+    """为 API 构建包含全部上下文的提示词。
     
     从数据集条目中提取并整理：
     - 问题/查询
@@ -241,7 +248,7 @@ def build_prompt_payload(entry: Dict[str, Any]) -> Dict[str, Any]:
         entry: 数据集中的单个条目，包含 question、table_list、knowledge、复杂度 等字段
         
     Returns:
-        包含 prompt、schema_payload、ext_knowledge、database_name、complexity 的字典
+        包含 prompt（带上下文）和 complexity 的字典
     """
     question = (entry.get("question") or "").strip()
     tables = entry.get("table_list") or []
@@ -252,19 +259,20 @@ def build_prompt_payload(entry: Dict[str, Any]) -> Dict[str, Any]:
     if knowledge:
         knowledge_blob["business"] = knowledge
 
-    prompt_payload: Dict[str, Any] = {
-        "question": question,
-        "table_list": tables,
-    }
-
-    # 移除空字段
-    if not question:
-        prompt_payload.pop("question")
-    if not tables:
-        prompt_payload.pop("table_list")
-
     schema_snippets = collect_table_schemas(tables)
-    schema_payload = dump_compact_json(schema_snippets)
+
+    prompt_payload: Dict[str, Any] = {}
+
+    if question:
+        prompt_payload["question"] = question
+    if tables:
+        prompt_payload["table_list"] = tables
+    if schema_snippets:
+        prompt_payload["schema_context"] = schema_snippets
+    if knowledge_blob:
+        prompt_payload["knowledge"] = knowledge_blob
+    if golden_examples:
+        prompt_payload["golden_examples"] = golden_examples
 
     catalog_name = (entry.get("catalog_name") or CATALOG_NAME or "").strip()
     database_name = (entry.get("database_name") or DATABASE_NAME or "").strip()
@@ -273,36 +281,31 @@ def build_prompt_payload(entry: Dict[str, Any]) -> Dict[str, Any]:
         schema_name = SCHEMA_NAME
     schema_name = (schema_name or "").strip()
 
+    db_info = {
+        "catalog_name": catalog_name,
+        "database_name": database_name,
+        "schema_name": schema_name,
+    }
+    db_info = {k: v for k, v in db_info.items() if v}
+    if db_info:
+        prompt_payload["database"] = db_info
+
     return {
         "prompt": prompt_payload,
-        "schema_payload": schema_payload,
-        "ext_knowledge": format_knowledge_blob(knowledge_blob),
-        "database_name": database_name,
-        "catalog_name": catalog_name,
-        "schema_name": schema_name,
         "complexity": complexity,
     }
 
 
 def run_text2sql_task(
     prompt: Dict[str, Any],
-    schema_payload: Optional[str],
-    ext_knowledge: Optional[str],
-    catalog_name: Optional[str],
-    database_name: Optional[str],
-    schema_name: Optional[str],
 ) -> Dict[str, Any]:
     """调用 workflow 服务执行 Text2SQL 任务。
     
-    发送提示词、schema、知识和数据库信息到服务，获取生成的 SQL 和执行结果。
+    提示词内已包含 schema、知识和数据库信息，将其随同请求发送到服务端，
+    获取生成的 SQL 并查看执行结果。
     
     Args:
-        prompt: 提示词字典，包含问题和表列表
-    schema_payload: 格式化后的 schema JSON 字符串
-    ext_knowledge: 格式化后的知识 JSON 字符串
-    catalog_name: 数据库 catalog 名称
-    database_name: 数据库名称
-    schema_name: schema 名称
+        prompt: 已封装上下文的提示词字典
         
     Returns:
         服务返回的 JSON 响应，包含 sql 和 result 字段
@@ -319,18 +322,6 @@ def run_text2sql_task(
         "task": prompt,
         "mode": "async",
     }
-    if catalog_name:
-        payload["catalog_name"] = catalog_name
-    if ext_knowledge:
-        payload["ext_knowledge"] = ext_knowledge
-    if database_name:
-        payload["database_name"] = database_name
-    if schema_name:
-        payload["schema_name"] = schema_name
-
-    # 先解析字符串参数为对象
-    schema_obj = json.loads(schema_payload) if schema_payload else None
-    knowledge_obj = json.loads(ext_knowledge) if ext_knowledge else None
 
     # 打印时采用 toon 格式
     debug_view = {
@@ -339,16 +330,7 @@ def run_text2sql_task(
         "namespace": payload["namespace"],
         "mode": payload["mode"],
     }
-    if schema_obj:
-        debug_view["schema_payload"] = toon_encode(schema_obj, {"indent": 2})
-    if knowledge_obj:
-        debug_view["ext_knowledge"] = toon_encode(knowledge_obj, {"indent": 2})
-    if catalog_name:
-        debug_view["catalog_name"] = catalog_name
-    if database_name:
-        debug_view["database_name"] = database_name
-    if schema_name:
-        debug_view["schema_name"] = schema_name
+    debug_view["task"] = toon_encode(prompt, {"indent": 2})
 
     print_block("POST 信息", toon_encode(debug_view, {"indent": 2}))
 
@@ -359,16 +341,6 @@ def run_text2sql_task(
         "task": toon_encode(payload["task"], {"indent": 2}),
         "mode": toon_encode("sync"),
     }
-    if catalog_name:
-        request_payload["catalog_name"] = toon_encode(catalog_name)
-    if knowledge_obj:
-        request_payload["ext_knowledge"] = toon_encode(knowledge_obj, {"indent": 2})
-    if database_name:
-        request_payload["database_name"] = toon_encode(database_name)
-    if schema_name:
-        request_payload["schema_name"] = toon_encode(schema_name)
-    if schema_obj:
-        request_payload["schema_payload"] = toon_encode(schema_obj, {"indent": 2})
 
     response = requests.post(API_URL, headers=headers, json=request_payload, timeout=WORKFLOW_TIMEOUT)
     if not response.ok:
@@ -385,6 +357,7 @@ def process_single_task(
     entry: Dict[str, Any],
     current_idx: int,
     total_count: int,
+    golden_examples: Optional[List[Dict[str, Any]]] = None,
 ) -> TaskResult:
     """处理单个任务。
     
@@ -397,21 +370,19 @@ def process_single_task(
         任务执行结果
     """
     sql_id = entry.get("sql_id", "<unknown>")
-    prompt_bundle = build_prompt_payload(entry)
+    prompt_bundle = build_prompt_payload(entry, golden_examples)
     prompt_str = toon_encode(prompt_bundle["prompt"], {"indent": 2})
     complexity = prompt_bundle.get("complexity", "未知")
     
-    print(f"\nProcessing {sql_id} ({current_idx}/{total_count}) [复杂度: {complexity}]")
+    status_line = color_text(
+        f"Processing {sql_id} ({current_idx}/{total_count}) [复杂度: {complexity}]",
+        color=Fore.YELLOW,
+        style=Style.BRIGHT,
+    )
+    print(f"\n{status_line}")
     print_block("模型提示词", prompt_str)
 
-    result = run_text2sql_task(
-        prompt_bundle["prompt"],
-        prompt_bundle.get("schema_payload"),
-        prompt_bundle.get("ext_knowledge"),
-        prompt_bundle.get("catalog_name"),
-        prompt_bundle.get("database_name"),
-        prompt_bundle.get("schema_name"),
-    )
+    result = run_text2sql_task(prompt_bundle["prompt"])
 
     sql_text = result.get("sql")
     query_result = result.get("result")
@@ -425,6 +396,29 @@ def process_single_task(
     return TaskResult(sql_id=sql_id, sql=sql_text, result=query_result)
 
 
+def extract_golden_examples(dataset: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """提取带有标准答案的示例，便于作为 few-shot 提示。"""
+    examples: List[Dict[str, Any]] = []
+    for entry in dataset:
+        if not entry.get("golden_sql"):
+            continue
+
+        question = (entry.get("question") or "").strip()
+        sql_text = (entry.get("sql") or "").strip()
+        if not question or not sql_text:
+            continue
+
+        examples.append(
+            {
+                "question": question,
+                "sql": sql_text,
+                "table_list": entry.get("table_list") or [],
+            }
+        )
+
+    return examples
+
+
 def print_task_stats(task_result: TaskResult, success_count: int, current_idx: int, total_count: int) -> None:
     """打印单个任务的执行统计。
     
@@ -436,17 +430,30 @@ def print_task_stats(task_result: TaskResult, success_count: int, current_idx: i
     """
     is_success = bool(task_result.sql and task_result.result is not None)
     current_rate = f"{(success_count / current_idx * 100):.2f}%"
+    status_word = color_text(
+        "是" if is_success else "否",
+        color=Fore.GREEN if is_success else Fore.RED,
+        style=Style.BRIGHT,
+    )
+    colored_rate = color_text(
+        current_rate,
+        color=Fore.GREEN if is_success else Fore.YELLOW,
+        style=Style.BRIGHT if is_success else None,
+    )
     
     stats_lines = [
-        f"本次执行是否成功: {'是' if is_success else '否'}",
+        f"本次执行是否成功: {status_word}",
         f"当前进度: {current_idx}/{total_count}",
         f"累计成功: {success_count}/{current_idx}",
-        f"当前成功率: {current_rate}",
+        f"当前成功率: {colored_rate}",
     ]
     print_block("准确率", "\n".join(stats_lines))
 
 
-def batch_process(dataset: List[Dict[str, Any]]) -> tuple[List[TaskResult], ProcessingStats]:
+def batch_process(
+    dataset: List[Dict[str, Any]],
+    golden_examples: Optional[List[Dict[str, Any]]] = None,
+) -> tuple[List[TaskResult], ProcessingStats]:
     """批量处理数据集中的所有任务。
     
     Args:
@@ -460,7 +467,7 @@ def batch_process(dataset: List[Dict[str, Any]]) -> tuple[List[TaskResult], Proc
     failed_ids: List[str] = []
     
     for idx, entry in enumerate(dataset, 1):
-        task_result = process_single_task(entry, idx, len(dataset))
+        task_result = process_single_task(entry, idx, len(dataset), golden_examples)
         results.append(task_result)
         
         is_success = bool(task_result.sql and task_result.result is not None)
@@ -508,11 +515,25 @@ def export_results(results: List[TaskResult], stats: ProcessingStats) -> None:
     with OUTPUT_PATH.open("w", encoding="utf-8") as handle:
         json.dump(results_dict, handle, ensure_ascii=False, indent=4)
     
-    print(f"\n✓ 结果已导出到: {OUTPUT_PATH}")
-    print(f"  - 总数: {stats.total}")
-    print(f"  - 成功: {stats.success}")
-    print(f"  - 失败: {stats.failed}")
-    print(f"  - 成功率: {stats.success_rate}")
+    print(
+        f"\n{color_text('✓ 结果已导出到: ' + str(OUTPUT_PATH), color=Fore.GREEN, style=Style.BRIGHT)}"
+    )
+    print(color_text(f"  - 总数: {stats.total}", color=Fore.WHITE))
+    print(color_text(f"  - 成功: {stats.success}", color=Fore.GREEN))
+    print(
+        color_text(
+            f"  - 失败: {stats.failed}",
+            color=Fore.RED if stats.failed else Fore.GREEN,
+            style=Style.BRIGHT if stats.failed else None,
+        )
+    )
+    print(
+        color_text(
+            f"  - 成功率: {stats.success_rate}",
+            color=Fore.GREEN if stats.success == stats.total else Fore.YELLOW,
+            style=Style.BRIGHT,
+        )
+    )
 
 def main() -> None:
     """主程序入口。
@@ -528,31 +549,48 @@ def main() -> None:
     
     try:
         # 加载数据集
-        print(f"\n📂 加载数据集: {DATASET_PATH}")
+        print(
+            f"\n{color_text('📂 加载数据集: ' + str(DATASET_PATH), color=Fore.CYAN, style=Style.BRIGHT)}"
+        )
         with DATASET_PATH.open("r", encoding="utf-8") as handle:
             dataset = json.load(handle)
-        print(f"✓ 已加载 {len(dataset)} 条任务")
+        print(
+            color_text(
+                f"✓ 已加载 {len(dataset)} 条任务",
+                color=Fore.GREEN,
+                style=Style.BRIGHT,
+            )
+        )
+
+        golden_examples = extract_golden_examples(dataset)
+        if golden_examples:
+            print(
+                color_text(
+                    f"✓ 提取 {len(golden_examples)} 条标准答案示例",
+                    color=Fore.GREEN,
+                )
+            )
 
         # 批量处理
-        print("\n🔄 开始处理任务...\n")
-        results, stats = batch_process(dataset)
+        print(color_text("\n🔄 开始处理任务...\n", color=Fore.CYAN))
+        results, stats = batch_process(dataset, golden_examples)
 
         # 导出结果
-        print("\n📝 导出结果...")
+        print(color_text("\n📝 导出结果...", color=Fore.CYAN))
         export_results(results, stats)
         
-        print("\n" + "=" * 70)
-        print("✓ 处理完成！")
-        print("=" * 70)
+        print("\n" + color_text("=" * 70, color=Fore.MAGENTA))
+        print(color_text("✓ 处理完成！", color=Fore.GREEN, style=Style.BRIGHT))
+        print(color_text("=" * 70, color=Fore.MAGENTA))
         
     except FileNotFoundError as e:
-        print(f"\n❌ 错误：文件未找到 - {e}")
+        print(color_text(f"\n❌ 错误：文件未找到 - {e}", color=Fore.RED, style=Style.BRIGHT))
         raise
     except json.JSONDecodeError as e:
-        print(f"\n❌ 错误：JSON 解析失败 - {e}")
+        print(color_text(f"\n❌ 错误：JSON 解析失败 - {e}", color=Fore.RED, style=Style.BRIGHT))
         raise
     except Exception as e:
-        print(f"\n❌ 错误：{type(e).__name__} - {e}")
+        print(color_text(f"\n❌ 错误：{type(e).__name__} - {e}", color=Fore.RED, style=Style.BRIGHT))
         raise
 
 
