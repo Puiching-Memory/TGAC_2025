@@ -1,4 +1,4 @@
-pymysql
-python-toon
-datus-agent
-agentlightning
+pymysql==1.1.2
+python-toon==0.1.2
+datus-agent==0.2.1
+# agentlightning==0.2.1 # rich 依赖冲突
