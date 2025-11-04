@@ -1,23 +1,26 @@
 """批量处理 Text2SQL 任务的脚本，支持用户认证和结果导出。
 
 此脚本的主要功能：
-1. 从 JSON 数据集加载任务，组织为统一的内部数据格式
-2. 获取数据库 schema 和业务知识
-3. 使用 toon 压缩数据后发送 POST 请求到 workflow 服务
-4. 打印信息时使用与发送相同的 toon 压缩格式
-5. 统计并导出结果
+1. 从预处理的提示词文件夹加载任务（提示词已在生成阶段 toon 编码）
+2. 直接使用预编码的提示词发送 POST 请求到 workflow 服务（避免重复编码）
+3. 打印提示词和结果信息
+4. 统计并导出结果
+
+注意：
+- 在运行此脚本前，请先运行 generate_prompts.py 生成提示词文件
+- 提示词文件已经是 toon 编码格式，本脚本只需读取和解码
+- 这样可以避免每次执行时重复编码，提升性能
 """
 
 from __future__ import annotations
 
 import json
-import random
-from dataclasses import dataclass, asdict, field
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 import requests
-from toon import encode as toon_encode
+from toon import encode as toon_encode, decode as toon_decode
 
 
 from colorama import Fore, Style, init as colorama_init
@@ -26,7 +29,6 @@ colorama_init(autoreset=True)
 
 def color_text(text: str, *, color: Optional[str] = None, style: Optional[str] = None) -> str:
     """Apply ANSI coloring when colorama is available."""
-
     segments: List[str] = []
     if color:
         segments.append(color)
@@ -43,10 +45,13 @@ def color_text(text: str, *, color: Optional[str] = None, style: Optional[str] =
 
 BASE_DIR = Path(__file__).resolve().parents[1]
 
-# 文件路径配置
-DATASET_PATH = BASE_DIR / "data" / "final_dataset.json"
-COMMON_KNOWLEDGE_PATH = BASE_DIR / "data" / "common_knowledge.md"
-SCHEMA_PATH = BASE_DIR / "data" / "schema.json"
+# 提示词版本配置（需要与 generate_prompts.py 中的版本一致）
+PROMPT_VERSION = "v1.0.0"
+
+# 提示词文件夹路径
+PROMPTS_INPUT_DIR = BASE_DIR / "prompts" / PROMPT_VERSION
+
+# 输出文件路径配置
 OUTPUT_PATH = BASE_DIR / "upload" / "dataset_exe_result.json"
 
 # API 服务配置
@@ -59,81 +64,24 @@ CLIENT_SECRET = "client"
 WORKFLOW_NAME = "reflection"
 NAMESPACE = "game"
 
-# 数据库信息配置
-DATABASE_VERSION = "4.0.0"  # 数据库版本
-DATABASE_TYPE = "StarRocks"  # 数据库型号
-
 # API 请求超时时间（秒）
 AUTH_TIMEOUT = 40
 WORKFLOW_TIMEOUT = 300
 
 # 缓存（全局状态）
 _ACCESS_TOKEN: str | None = None
-_COMMON_KNOWLEDGE_CACHE: str | None = None
-_SCHEMA_CACHE: Dict[str, TableSchema] | None = None
-_SELECTED_GOLDEN_IDS: List[str] = []  # 记录选中的黄金示例 ID
 
 
 # ============================================================================
-# 数据类定义 - 统一的内部数据格式
+# 数据类定义
 # ============================================================================
-
-@dataclass
-class DatabaseInfo:
-    """数据库信息。"""
-    database_type: str
-    database_version: str
-
-
-@dataclass
-class ColumnSchema:
-    """列定义。"""
-    col: str
-    type: str
-    description: str = ""
-
-
-@dataclass
-class TableSchema:
-    """表的 schema 定义。"""
-    table_name: str
-    table_description: str
-    columns: List[ColumnSchema] = field(default_factory=list)
-
-
-@dataclass
-class KnowledgeBase:
-    """知识库信息。"""
-    common: str
-    business: Optional[str] = None
-
-
-@dataclass
-class GoldenExample:
-    """标准答案示例。"""
-    question: str
-    sql: str
-    table_list: List[str]
-
-
-@dataclass
-class TaskPrompt:
-    """单个任务的完整提示词（包含所有上下文）。"""
-    question: str
-    table_list: List[str]
-    schema_context: List[TableSchema]
-    knowledge: KnowledgeBase
-    golden_examples: List[GoldenExample]
-    database: DatabaseInfo
-    complexity: str  # 用于日志显示
-
 
 @dataclass
 class TaskRequest:
     """发送给 workflow 服务的请求体。"""
     workflow: str
     namespace: str
-    task: TaskPrompt
+    task: Dict[str, Any]  # 直接使用解析后的字典
     mode: str = "sync"
 
 
@@ -158,118 +106,13 @@ class ProcessingStats:
 @dataclass
 class Resources:
     """应用启动时加载的资源。"""
-    dataset: List[Dict[str, Any]]
-    golden_examples: List[GoldenExample]
+    prompt_files: List[Path]  # 提示词文件路径列表
+    metadata: Dict[str, Any]  # 元数据信息
 
 
 # ============================================================================
 # 工具函数
 # ============================================================================
-
-# ============================================================================
-# 资源加载
-# ============================================================================
-
-def extract_golden_examples(dataset: List[Dict[str, Any]]) -> List[GoldenExample]:
-    """提取带有标准答案的示例，随机选择最多 1 条作为 few-shot 提示。
-    
-    选中的示例 ID 会被保存到全局状态 _SELECTED_GOLDEN_IDS，便于后续查证。
-    
-    Returns:
-        GoldenExample 对象列表
-    """
-    global _SELECTED_GOLDEN_IDS
-    
-    candidates: List[Dict[str, Any]] = []
-    for entry in dataset:
-        if not entry.get("golden_sql"):
-            continue
-
-        question = (entry.get("question") or "").strip()
-        sql_text = (entry.get("sql") or "").strip()
-        if not question or not sql_text:
-            continue
-
-        candidates.append(
-            {
-                "sql_id": entry.get("sql_id", "<unknown>"),
-                "question": question,
-                "sql": sql_text,
-                "table_list": entry.get("table_list") or [],
-            }
-        )
-
-    # 随机选择最多 1 条
-    max_examples = min(1, len(candidates))
-    selected = random.sample(candidates, max_examples) if candidates else []
-    
-    # 记录选中的 ID
-    _SELECTED_GOLDEN_IDS = [ex["sql_id"] for ex in selected]
-    
-    # 转换为 GoldenExample 对象
-    return [
-        GoldenExample(
-            question=ex["question"],
-            sql=ex["sql"],
-            table_list=ex["table_list"],
-        )
-        for ex in selected
-    ]
-
-
-def load_resources() -> Resources:
-    """从磁盘加载所有必需的资源文件。
-    
-    返回值包含：
-    - dataset: 从 final_dataset.json 读取的任务列表
-    - golden_examples: 从数据集中随机选择的标准答案示例（最多 3 条）
-    
-    Returns:
-        Resources 对象，包含数据集和黄金示例
-        
-    Raises:
-        FileNotFoundError: 如果数据集文件不存在
-        json.JSONDecodeError: 如果 JSON 格式不正确
-    """
-    global _SELECTED_GOLDEN_IDS
-    
-    # 加载数据集
-    print(
-        f"\n{color_text('📂 加载数据集: ' + str(DATASET_PATH), color=Fore.CYAN, style=Style.BRIGHT)}"
-    )
-    with DATASET_PATH.open("r", encoding="utf-8") as handle:
-        dataset = json.load(handle)
-    print(
-        color_text(
-            f"✓ 已加载 {len(dataset)} 条任务",
-            color=Fore.GREEN,
-            style=Style.BRIGHT,
-        )
-    )
-
-    # 提取标准答案示例
-    golden_examples = extract_golden_examples(dataset)
-    if golden_examples:
-        print(
-            color_text(
-                f"✓ 随机选择 {len(golden_examples)} 条标准答案示例作为 few-shot",
-                color=Fore.GREEN,
-            )
-        )
-        print(
-            color_text(
-                f"  选中示例 ID: {', '.join(_SELECTED_GOLDEN_IDS)}",
-                color=Fore.CYAN,
-            )
-        )
-
-    return Resources(dataset=dataset, golden_examples=golden_examples)
-
-
-# ============================================================================
-# 工具函数
-# ============================================================================
-
 
 def print_block(title: str, content: str) -> None:
     """打印格式化的信息块。
@@ -282,74 +125,6 @@ def print_block(title: str, content: str) -> None:
     processed_content = content.replace("\\n", "\n")
     print(f"\n[{colored_title}]")
     print(color_text(processed_content, color=Fore.WHITE))
-
-def get_schema_cache() -> Dict[str, TableSchema]:
-    """加载并缓存数据库 schema 定义。
-    
-    将 schema JSON 文件中的表定义按表名索引为 TableSchema 对象。
-    
-    Returns:
-        按表名（小写）索引的 TableSchema 字典。如果文件不存在，返回空字典。
-    """
-    global _SCHEMA_CACHE
-    if _SCHEMA_CACHE is not None:
-        return _SCHEMA_CACHE
-
-    if not SCHEMA_PATH.exists():
-        _SCHEMA_CACHE = {}
-        return _SCHEMA_CACHE
-
-    with SCHEMA_PATH.open("r", encoding="utf-8") as handle:
-        raw_schema = json.load(handle)
-
-    cache: Dict[str, TableSchema] = {}
-    for table in raw_schema:
-        table_name = table.get("table_name")
-        if not table_name:
-            continue
-        
-        columns = table.get("columns") or []
-        processed_columns = [
-            ColumnSchema(
-                col=col.get("col"),
-                type=col.get("type"),
-                description=col.get("description", ""),
-            )
-            for col in columns
-            if col.get("col")
-        ]
-        
-        cache[table_name.lower()] = TableSchema(
-            table_name=table_name,
-            table_description=table.get("table_description", ""),
-            columns=processed_columns,
-        )
-
-    _SCHEMA_CACHE = cache
-    return _SCHEMA_CACHE
-
-
-def collect_table_schemas(table_names: List[str]) -> List[TableSchema]:
-    """获取指定表的 schema 信息。
-    
-    Args:
-        table_names: 表名列表
-        
-    Returns:
-        指定表的 TableSchema 对象列表
-    """
-    if not table_names:
-        return []
-
-    schema_cache = get_schema_cache()
-    collected = []
-
-    for table_name in table_names:
-        schema = schema_cache.get(table_name.lower())
-        if schema:
-            collected.append(schema)
-
-    return collected
 
 
 def authenticate() -> str:
@@ -382,77 +157,159 @@ def authenticate() -> str:
     return _ACCESS_TOKEN
 
 
-def get_common_knowledge() -> str:
-    """获取缓存的公共知识文档。
-    
-    首次调用时从文件读取，之后返回缓存结果。
+# ============================================================================
+# 资源加载
+# ============================================================================
+
+def load_prompt_metadata() -> Dict[str, Any]:
+    """加载提示词元数据。
     
     Returns:
-        公共知识文档的内容
+        元数据字典
+        
+    Raises:
+        FileNotFoundError: 如果元数据文件不存在
     """
-    global _COMMON_KNOWLEDGE_CACHE
-    if _COMMON_KNOWLEDGE_CACHE is None:
-        _COMMON_KNOWLEDGE_CACHE = COMMON_KNOWLEDGE_PATH.read_text(encoding="utf-8")
-    return _COMMON_KNOWLEDGE_CACHE
-
-
-
-
-
-def build_prompt_payload(entry: Dict[str, Any], golden_examples: Optional[List[GoldenExample]] = None) -> TaskPrompt:
-    """为 API 构建包含全部上下文的提示词。
+    metadata_path = PROMPTS_INPUT_DIR / "metadata.json"
+    if not metadata_path.exists():
+        raise FileNotFoundError(
+            f"提示词元数据文件不存在: {metadata_path}\n"
+            f"请先运行 generate_prompts.py 生成提示词文件"
+        )
     
-    从数据集条目中提取并整理所有上下文，返回统一的 TaskPrompt 对象。
+    with metadata_path.open("r", encoding="utf-8") as handle:
+        return json.load(handle)
+
+
+def load_prompt_files() -> List[Path]:
+    """加载所有提示词文件路径。
+    
+    Returns:
+        提示词文件路径列表
+        
+    Raises:
+        FileNotFoundError: 如果提示词目录不存在
+    """
+    if not PROMPTS_INPUT_DIR.exists():
+        raise FileNotFoundError(
+            f"提示词目录不存在: {PROMPTS_INPUT_DIR}\n"
+            f"请先运行 generate_prompts.py 生成提示词文件"
+        )
+    
+    # 获取所有 .txt 文件（排除 metadata.json）
+    prompt_files = sorted(PROMPTS_INPUT_DIR.glob("*.txt"))
+    
+    if not prompt_files:
+        raise FileNotFoundError(
+            f"提示词目录中没有找到 .txt 文件: {PROMPTS_INPUT_DIR}\n"
+            f"请先运行 generate_prompts.py 生成提示词文件"
+        )
+    
+    return prompt_files
+
+
+def load_resources() -> Resources:
+    """从磁盘加载所有必需的资源文件。
+    
+    返回值包含：
+    - prompt_files: 提示词文件路径列表
+    - metadata: 提示词元数据信息
+    
+    Returns:
+        Resources 对象，包含提示词文件和元数据
+        
+    Raises:
+        FileNotFoundError: 如果提示词文件或元数据不存在
+    """
+    print(
+        f"\n{color_text('📂 加载提示词资源...', color=Fore.CYAN, style=Style.BRIGHT)}"
+    )
+    print(
+        color_text(
+            f"  版本: {PROMPT_VERSION}",
+            color=Fore.WHITE,
+        )
+    )
+    print(
+        color_text(
+            f"  目录: {PROMPTS_INPUT_DIR}",
+            color=Fore.WHITE,
+        )
+    )
+
+    # 加载元数据
+    metadata = load_prompt_metadata()
+    print(
+        color_text(
+            f"✓ 已加载元数据",
+            color=Fore.GREEN,
+        )
+    )
+    print(
+        color_text(
+            f"  生成时间: {metadata.get('generated_at', 'unknown')}",
+            color=Fore.CYAN,
+        )
+    )
+    
+    golden_ids = metadata.get('golden_example_ids', [])
+    if golden_ids:
+        print(
+            color_text(
+                f"  Few-shot 示例 ID: {', '.join(golden_ids)}",
+                color=Fore.CYAN,
+            )
+        )
+
+    # 加载提示词文件
+    prompt_files = load_prompt_files()
+    print(
+        color_text(
+            f"✓ 已加载 {len(prompt_files)} 个提示词文件",
+            color=Fore.GREEN,
+            style=Style.BRIGHT,
+        )
+    )
+
+    return Resources(prompt_files=prompt_files, metadata=metadata)
+
+
+# ============================================================================
+# 提示词处理
+# ============================================================================
+
+def load_prompt_from_file(prompt_file: Path) -> tuple[Dict[str, Any], str]:
+    """从文件加载并解析提示词。
     
     Args:
-        entry: 数据集中的单个条目，包含 question、table_list、knowledge、复杂度 等字段
-        golden_examples: 标准答案示例列表（可选）
+        prompt_file: 提示词文件路径
         
     Returns:
-        包含完整上下文的 TaskPrompt 对象
+        (解析后的提示词字典, 原始 toon 编码字符串) 的元组
+        
+    Note:
+        提示词文件已经是 toon 编码格式，我们同时返回解析后的字典和原始字符串。
+        原始字符串可以直接用于发送 API 请求，避免重复编码。
     """
-    question = (entry.get("question") or "").strip()
-    tables = entry.get("table_list") or []
-    knowledge = entry.get("knowledge") or ""
-    complexity = entry.get("复杂度", "未知")
-
-    # 构建知识库对象
-    knowledge_base = KnowledgeBase(
-        common=get_common_knowledge(),
-        business=knowledge if knowledge else None,
-    )
-
-    # 收集 schema 信息
-    schema_snippets = collect_table_schemas(tables)
-
-    # 构建数据库信息对象
-    db_info = DatabaseInfo(
-        database_type=DATABASE_TYPE,
-        database_version=DATABASE_VERSION,
-    )
-
-    # 构建最终的 TaskPrompt 对象
-    return TaskPrompt(
-        question=question,
-        table_list=tables,
-        schema_context=schema_snippets,
-        knowledge=knowledge_base,
-        golden_examples=golden_examples or [],
-        database=db_info,
-        complexity=complexity,
-    )
+    prompt_content = prompt_file.read_text(encoding="utf-8")
+    # 使用 toon decode 解析提示词
+    prompt_dict = toon_decode(prompt_content)
+    # 返回解析后的字典和原始 toon 编码字符串
+    return prompt_dict, prompt_content
 
 
-def run_text2sql_task(request: TaskRequest) -> Optional[Dict[str, Any]]:
+# ============================================================================
+# API 调用
+# ============================================================================
+
+def run_text2sql_task(request: TaskRequest, toon_encoded_task: str) -> Optional[Dict[str, Any]]:
     """调用 workflow 服务执行 Text2SQL 任务。
     
-    将 TaskRequest 对象转换为字典后使用 toon 编码，然后：
-    1. 打印编码后的请求信息到控制台
-    2. 将编码后的数据发送给服务器
-    3. 解析并返回响应
+    直接使用预处理阶段生成的 toon 编码字符串，不再重复编码。
     
     Args:
         request: 包含完整上下文的 TaskRequest 对象
+        toon_encoded_task: 预处理阶段生成的 toon 编码字符串
         
     Returns:
         服务返回的 JSON 响应，包含 sql 和 result 字段；超时或错误时返回 None
@@ -460,20 +317,14 @@ def run_text2sql_task(request: TaskRequest) -> Optional[Dict[str, Any]]:
     try:
         headers = {"Authorization": f"Bearer {authenticate()}"}
         
-        # 将 TaskRequest 转换为字典
-        request_dict = asdict(request)
-        
-        # 使用 toon 编码整个请求
-        toon_encoded_request = toon_encode(request_dict, {"indent": 2})
-        
-        # 打印编码后的请求信息
-        print_block("POST 信息 (toon 编码)", toon_encoded_request)
+        # 打印已编码的提示词（来自文件，不再重新编码）
+        print_block("POST 信息 (toon 编码 - 来自预处理文件)", toon_encoded_task)
         
         # 发送时将已编码的字符串作为 JSON 传输
         payload = {
             "workflow": toon_encode(request.workflow),
             "namespace": toon_encode(request.namespace),
-            "task": toon_encode(asdict(request.task), {"indent": 2}),
+            "task": toon_encoded_task,  # 直接使用预处理的 toon 编码
             "mode": toon_encode(request.mode),
         }
 
@@ -493,26 +344,30 @@ def run_text2sql_task(request: TaskRequest) -> Optional[Dict[str, Any]]:
         return None
 
 
+# ============================================================================
+# 任务处理
+# ============================================================================
+
 def process_single_task(
-    entry: Dict[str, Any],
+    prompt_file: Path,
     current_idx: int,
     total_count: int,
-    golden_examples: Optional[List[GoldenExample]] = None,
 ) -> TaskResult:
     """处理单个任务。
     
     Args:
-        entry: 数据集条目
+        prompt_file: 提示词文件路径
         current_idx: 当前处理的索引（从 1 开始）
         total_count: 总任务数
-        golden_examples: 标准答案示例列表（可选）
         
     Returns:
         任务执行结果。如果请求超时或失败，返回包含 None 值的 TaskResult
     """
-    sql_id = entry.get("sql_id", "<unknown>")
-    task_prompt = build_prompt_payload(entry, golden_examples)
-    complexity = task_prompt.complexity
+    # 加载提示词（同时获取解析后的字典和原始 toon 编码字符串）
+    task_prompt, toon_encoded_prompt = load_prompt_from_file(prompt_file)
+    
+    sql_id = task_prompt.get("sql_id", prompt_file.stem)
+    complexity = task_prompt.get("complexity", "未知")
     
     status_line = color_text(
         f"Processing {sql_id} ({current_idx}/{total_count}) [复杂度: {complexity}]",
@@ -521,19 +376,17 @@ def process_single_task(
     )
     print(f"\n{status_line}")
     
-    # 使用 toon 编码显示提示词
-    prompt_dict = asdict(task_prompt)
-    prompt_str = toon_encode(prompt_dict, {"indent": 2})
-    print_block("模型提示词", prompt_str)
+    # 直接显示从文件读取的 toon 编码（不再重新编码）
+    print_block("模型提示词 (toon 编码 - 来自预处理文件)", toon_encoded_prompt)
 
     # 构建请求对象并发送
     request = TaskRequest(
         workflow=WORKFLOW_NAME,
         namespace=NAMESPACE,
-        task=task_prompt,
+        task=task_prompt,  # 虽然这里传入字典，但实际发送时使用 toon_encoded_prompt
         mode="sync",
     )
-    result = run_text2sql_task(request)
+    result = run_text2sql_task(request, toon_encoded_prompt)
 
     # 如果请求失败或超时，result 为 None
     if result is None:
@@ -592,13 +445,12 @@ def print_task_stats(task_result: TaskResult, success_count: int, current_idx: i
 
 
 def batch_process(
-    dataset: List[Dict[str, Any]],
-    golden_examples: Optional[List[GoldenExample]] = None,
+    prompt_files: List[Path],
 ) -> tuple[List[TaskResult], ProcessingStats]:
-    """批量处理数据集中的所有任务。
+    """批量处理所有提示词文件。
     
     Args:
-        dataset: 包含多个任务条目的列表
+        prompt_files: 提示词文件路径列表
         
     Returns:
         (任务结果列表, 处理统计信息) 的元组
@@ -607,8 +459,8 @@ def batch_process(
     success_count = 0
     failed_ids: List[str] = []
     
-    for idx, entry in enumerate(dataset, 1):
-        task_result = process_single_task(entry, idx, len(dataset), golden_examples)
+    for idx, prompt_file in enumerate(prompt_files, 1):
+        task_result = process_single_task(prompt_file, idx, len(prompt_files))
         results.append(task_result)
         
         is_success = bool(task_result.sql and task_result.result is not None)
@@ -617,9 +469,9 @@ def batch_process(
         else:
             failed_ids.append(task_result.sql_id)
         
-        print_task_stats(task_result, success_count, idx, len(dataset))
+        print_task_stats(task_result, success_count, idx, len(prompt_files))
 
-    total_count = len(dataset)
+    total_count = len(prompt_files)
     failed_count = total_count - success_count
     success_rate = f"{(success_count / total_count * 100):.2f}%" if total_count > 0 else "0%"
     
@@ -633,6 +485,10 @@ def batch_process(
 
     return results, stats
 
+
+# ============================================================================
+# 结果导出
+# ============================================================================
 
 def export_results(results: List[TaskResult], stats: ProcessingStats) -> None:
     """将处理结果导出到 JSON 文件。
@@ -676,16 +532,22 @@ def export_results(results: List[TaskResult], stats: ProcessingStats) -> None:
         )
     )
 
+
+# ============================================================================
+# 主程序
+# ============================================================================
+
 def main() -> None:
     """主程序入口。
     
     流程：
-    1. 从文件加载数据集和资源
+    1. 从文件加载提示词资源
     2. 批量处理所有任务
     3. 导出结果到文件
     """
     print("=" * 70)
-    print("开始批量处理 Text2SQL 任务")
+    print(color_text("开始批量处理 Text2SQL 任务", color=Fore.MAGENTA, style=Style.BRIGHT))
+    print(color_text(f"提示词版本: {PROMPT_VERSION}", color=Fore.CYAN))
     print("=" * 70)
     
     try:
@@ -694,7 +556,7 @@ def main() -> None:
 
         # 批量处理
         print(color_text("\n🔄 开始处理任务...\n", color=Fore.CYAN))
-        results, stats = batch_process(resources.dataset, resources.golden_examples)
+        results, stats = batch_process(resources.prompt_files)
 
         # 导出结果
         print(color_text("\n📝 导出结果...", color=Fore.CYAN))
