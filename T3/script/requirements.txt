@@ -7,5 +7,5 @@ langchain-community==0.4.1
 langchain-openai==1.0.2
 
 # M-Schema 依赖
-sqlalchemy
-llama-index
+sqlalchemy==2.0.44
+llama-index==0.12.42

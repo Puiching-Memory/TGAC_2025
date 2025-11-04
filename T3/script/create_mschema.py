@@ -1,9 +1,13 @@
 import sys
 import os
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../lib/M-Schema'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../lib/M-Schema'))
 
 from sqlalchemy import create_engine
 from schema_engine import SchemaEngine
+
+# 读取StarRocks数据库的配置信息
+# 然后连接数据库，生成M-Schema并保存到文件
+# doc: https://github.com/XGenerationLab/M-Schema
 
 db_user_name = "root"
 db_host = "127.0.0.1"
