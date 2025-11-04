@@ -1,4 +1,11 @@
 pymysql==1.1.2
 python-toon==0.1.2
-datus-agent==0.2.1
-# agentlightning==0.2.1 # rich 依赖冲突
+# datus-agent==0.2.1
+agentlightning[verl]==0.2.1 # 和 datus-agent 同时安装时有 rich 依赖冲突
+langchain==1.0.3
+langchain-community==0.4.1
+langchain-openai==1.0.2
+
+# M-Schema 依赖
+sqlalchemy
+llama-index
