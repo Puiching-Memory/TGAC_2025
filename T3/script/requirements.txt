@@ -1,5 +1,5 @@
 pymysql==1.1.2
-python-toon==0.1.2
+toon_format==0.1.0
 # datus-agent==0.2.1
 agentlightning[verl]==0.2.1 # 和 datus-agent 同时安装时有 rich 依赖冲突
 langchain==1.0.3

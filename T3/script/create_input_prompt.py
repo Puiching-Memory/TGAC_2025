@@ -1,6 +1,6 @@
 from tools.tools4sql import get_mschema
 import json
-from toon import encode
+from toon_format import encode
 from transformers import AutoTokenizer
 
 with open("T3/data/final_dataset.json", "r", encoding="utf-8") as f:
