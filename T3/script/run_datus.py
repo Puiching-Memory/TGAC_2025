@@ -1,26 +1,19 @@
 """批量处理 Text2SQL 任务的脚本，支持用户认证和结果导出。
 
-此脚本的主要功能：
-1. 从预处理的提示词文件夹加载任务（提示词已在生成阶段 toon 编码）
-2. 直接使用预编码的提示词发送 POST 请求到 workflow 服务（避免重复编码）
-3. 打印提示词和结果信息
-4. 统计并导出结果
-
-注意：
-- 在运行此脚本前，请先运行 generate_prompts.py 生成提示词文件
-- 提示词文件已经是 toon 编码格式，本脚本只需读取和解码
-- 这样可以避免每次执行时重复编码，提升性能
+主要步骤：
+1. 从指定提示词目录加载纯文本提示词
+2. 调用 workflow 服务执行任务
+3. 打印提示词与结果，统计成功率并导出 JSON 文件
 """
 
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 import requests
-from toon import encode as toon_encode, decode as toon_decode
 
 
 from colorama import Fore, Style, init as colorama_init
@@ -45,11 +38,11 @@ def color_text(text: str, *, color: Optional[str] = None, style: Optional[str] =
 
 BASE_DIR = Path(__file__).resolve().parents[1]
 
-# 提示词版本配置（需要与 generate_prompts.py 中的版本一致）
-PROMPT_VERSION = "v1.0.0"
+# 提示词版本配置（与输入目录名称保持一致）
+PROMPT_VERSION = "V1"
 
 # 提示词文件夹路径
-PROMPTS_INPUT_DIR = BASE_DIR / "prompts" / PROMPT_VERSION
+PROMPTS_INPUT_DIR = BASE_DIR / "script" / "prompt" / "input" / PROMPT_VERSION
 
 # 输出文件路径配置
 OUTPUT_PATH = BASE_DIR / "upload" / "dataset_exe_result.json"
@@ -81,7 +74,7 @@ class TaskRequest:
     """发送给 workflow 服务的请求体。"""
     workflow: str
     namespace: str
-    task: Dict[str, Any]  # 直接使用解析后的字典
+    task: Dict[str, Any]  # 包含 prompt 等上下文信息
     mode: str = "sync"
 
 
@@ -101,13 +94,6 @@ class ProcessingStats:
     failed: int
     success_rate: str
     failed_ids: List[str]
-
-
-@dataclass
-class Resources:
-    """应用启动时加载的资源。"""
-    prompt_files: List[Path]  # 提示词文件路径列表
-    metadata: Dict[str, Any]  # 元数据信息
 
 
 # ============================================================================
@@ -161,26 +147,6 @@ def authenticate() -> str:
 # 资源加载
 # ============================================================================
 
-def load_prompt_metadata() -> Dict[str, Any]:
-    """加载提示词元数据。
-    
-    Returns:
-        元数据字典
-        
-    Raises:
-        FileNotFoundError: 如果元数据文件不存在
-    """
-    metadata_path = PROMPTS_INPUT_DIR / "metadata.json"
-    if not metadata_path.exists():
-        raise FileNotFoundError(
-            f"提示词元数据文件不存在: {metadata_path}\n"
-            f"请先运行 generate_prompts.py 生成提示词文件"
-        )
-    
-    with metadata_path.open("r", encoding="utf-8") as handle:
-        return json.load(handle)
-
-
 def load_prompt_files() -> List[Path]:
     """加载所有提示词文件路径。
     
@@ -193,7 +159,7 @@ def load_prompt_files() -> List[Path]:
     if not PROMPTS_INPUT_DIR.exists():
         raise FileNotFoundError(
             f"提示词目录不存在: {PROMPTS_INPUT_DIR}\n"
-            f"请先运行 generate_prompts.py 生成提示词文件"
+            f"请先准备提示词文件"
         )
     
     # 获取所有 .txt 文件（排除 metadata.json）
@@ -202,24 +168,20 @@ def load_prompt_files() -> List[Path]:
     if not prompt_files:
         raise FileNotFoundError(
             f"提示词目录中没有找到 .txt 文件: {PROMPTS_INPUT_DIR}\n"
-            f"请先运行 generate_prompts.py 生成提示词文件"
+            f"请先准备提示词文件"
         )
     
     return prompt_files
 
 
-def load_resources() -> Resources:
-    """从磁盘加载所有必需的资源文件。
-    
-    返回值包含：
-    - prompt_files: 提示词文件路径列表
-    - metadata: 提示词元数据信息
+def load_resources() -> List[Path]:
+    """从磁盘收集提示词文件列表。
     
     Returns:
-        Resources 对象，包含提示词文件和元数据
+        提示词文件路径列表
         
     Raises:
-        FileNotFoundError: 如果提示词文件或元数据不存在
+        FileNotFoundError: 如果提示词文件不存在
     """
     print(
         f"\n{color_text('📂 加载提示词资源...', color=Fore.CYAN, style=Style.BRIGHT)}"
@@ -237,30 +199,6 @@ def load_resources() -> Resources:
         )
     )
 
-    # 加载元数据
-    metadata = load_prompt_metadata()
-    print(
-        color_text(
-            f"✓ 已加载元数据",
-            color=Fore.GREEN,
-        )
-    )
-    print(
-        color_text(
-            f"  生成时间: {metadata.get('generated_at', 'unknown')}",
-            color=Fore.CYAN,
-        )
-    )
-    
-    golden_ids = metadata.get('golden_example_ids', [])
-    if golden_ids:
-        print(
-            color_text(
-                f"  Few-shot 示例 ID: {', '.join(golden_ids)}",
-                color=Fore.CYAN,
-            )
-        )
-
     # 加载提示词文件
     prompt_files = load_prompt_files()
     print(
@@ -271,61 +209,51 @@ def load_resources() -> Resources:
         )
     )
 
-    return Resources(prompt_files=prompt_files, metadata=metadata)
+    return prompt_files
 
 
 # ============================================================================
 # 提示词处理
 # ============================================================================
 
-def load_prompt_from_file(prompt_file: Path) -> tuple[Dict[str, Any], str]:
-    """从文件加载并解析提示词。
-    
-    Args:
-        prompt_file: 提示词文件路径
-        
-    Returns:
-        (解析后的提示词字典, 原始 toon 编码字符串) 的元组
-        
-    Note:
-        提示词文件已经是 toon 编码格式，我们同时返回解析后的字典和原始字符串。
-        原始字符串可以直接用于发送 API 请求，避免重复编码。
-    """
-    prompt_content = prompt_file.read_text(encoding="utf-8")
-    # 使用 toon decode 解析提示词
-    prompt_dict = toon_decode(prompt_content)
-    # 返回解析后的字典和原始 toon 编码字符串
-    return prompt_dict, prompt_content
+def load_prompt_from_file(prompt_file: Path) -> str:
+    """从文件加载提示词内容。"""
+    return prompt_file.read_text(encoding="utf-8")
 
 
 # ============================================================================
 # API 调用
 # ============================================================================
 
-def run_text2sql_task(request: TaskRequest, toon_encoded_task: str) -> Optional[Dict[str, Any]]:
-    """调用 workflow 服务执行 Text2SQL 任务。
-    
-    直接使用预处理阶段生成的 toon 编码字符串，不再重复编码。
-    
-    Args:
-        request: 包含完整上下文的 TaskRequest 对象
-        toon_encoded_task: 预处理阶段生成的 toon 编码字符串
-        
-    Returns:
-        服务返回的 JSON 响应，包含 sql 和 result 字段；超时或错误时返回 None
-    """
+def run_text2sql_task(request: TaskRequest) -> Optional[Dict[str, Any]]:
+    """调用 workflow 服务执行 Text2SQL 任务。"""
     try:
         headers = {"Authorization": f"Bearer {authenticate()}"}
-        
-        # 打印已编码的提示词（来自文件，不再重新编码）
-        print_block("POST 信息 (toon 编码 - 来自预处理文件)", toon_encoded_task)
-        
-        # 发送时将已编码的字符串作为 JSON 传输
+        if isinstance(request.task, dict):
+            task_preview = dict(request.task)
+            prompt_text = task_preview.get("prompt")
+            if isinstance(prompt_text, str) and len(prompt_text) > 200:
+                task_preview["prompt"] = f"{prompt_text[:200]}... (truncated)"
+        else:
+            task_preview = request.task
+
+        payload_preview = {
+            "workflow": request.workflow,
+            "namespace": request.namespace,
+            "task": task_preview,
+            "mode": request.mode,
+        }
+
+        print_block(
+            "POST 信息",
+            json.dumps(payload_preview, ensure_ascii=False, indent=2)
+        )
+
         payload = {
-            "workflow": toon_encode(request.workflow),
-            "namespace": toon_encode(request.namespace),
-            "task": toon_encoded_task,  # 直接使用预处理的 toon 编码
-            "mode": toon_encode(request.mode),
+            "workflow": request.workflow,
+            "namespace": request.namespace,
+            "task": request.task,
+            "mode": request.mode,
         }
 
         response = requests.post(API_URL, headers=headers, json=payload, timeout=WORKFLOW_TIMEOUT)
@@ -363,30 +291,31 @@ def process_single_task(
     Returns:
         任务执行结果。如果请求超时或失败，返回包含 None 值的 TaskResult
     """
-    # 加载提示词（同时获取解析后的字典和原始 toon 编码字符串）
-    task_prompt, toon_encoded_prompt = load_prompt_from_file(prompt_file)
-    
-    sql_id = task_prompt.get("sql_id", prompt_file.stem)
-    complexity = task_prompt.get("complexity", "未知")
+    # 加载提示词内容
+    prompt_content = load_prompt_from_file(prompt_file)
+
+    sql_id = prompt_file.stem
     
     status_line = color_text(
-        f"Processing {sql_id} ({current_idx}/{total_count}) [复杂度: {complexity}]",
+        f"Processing {sql_id} ({current_idx}/{total_count})",
         color=Fore.YELLOW,
         style=Style.BRIGHT,
     )
     print(f"\n{status_line}")
-    
-    # 直接显示从文件读取的 toon 编码（不再重新编码）
-    print_block("模型提示词 (toon 编码 - 来自预处理文件)", toon_encoded_prompt)
+
+    print_block("模型提示词", prompt_content)
 
     # 构建请求对象并发送
     request = TaskRequest(
         workflow=WORKFLOW_NAME,
         namespace=NAMESPACE,
-        task=task_prompt,  # 虽然这里传入字典，但实际发送时使用 toon_encoded_prompt
+        task={
+            "sql_id": sql_id,
+            "prompt": prompt_content,
+        },
         mode="sync",
     )
-    result = run_text2sql_task(request, toon_encoded_prompt)
+    result = run_text2sql_task(request)
 
     # 如果请求失败或超时，result 为 None
     if result is None:
@@ -403,11 +332,14 @@ def process_single_task(
     sql_text = result.get("sql")
     query_result = result.get("result")
 
-    # 使用 toon 编码显示结果
-    result_view = toon_encode({
-        "sql": sql_text,
-        "result": query_result,
-    }, {"indent": 2})
+    result_view = json.dumps(
+        {
+            "sql": sql_text,
+            "result": query_result,
+        },
+        ensure_ascii=False,
+        indent=2,
+    )
     print_block("返回结果", result_view)
 
     return TaskResult(sql_id=sql_id, sql=sql_text, result=query_result)
@@ -552,11 +484,11 @@ def main() -> None:
     
     try:
         # 加载所有资源
-        resources = load_resources()
+        prompt_files = load_resources()
 
         # 批量处理
         print(color_text("\n🔄 开始处理任务...\n", color=Fore.CYAN))
-        results, stats = batch_process(resources.prompt_files)
+        results, stats = batch_process(prompt_files)
 
         # 导出结果
         print(color_text("\n📝 导出结果...", color=Fore.CYAN))

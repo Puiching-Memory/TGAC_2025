@@ -1,0 +1,385 @@
+你是一名StarRocks mysql 4.0.0专家，现在需要阅读并理解下面的[数据库schema]描述，以及可能用到的[参考信息]，并运用StarRocks mysql 4.0.0知识生成sql语句回答[用户问题]。
+[用户问题]: 统计下列英雄和对应上线日期，新英雄上线首周的持续选择情况。限定除自定义模式，新手、训练场外所有模式
+输出：英雄id、首周选择新英雄次数超过3次的玩家、首周选择新英雄次数超过10次的玩家、首周选择过新英雄的玩家、超过3次的玩家占比、超过10次的玩家占比
+
+  
+[数据库schema]: [1]:
+  - table_name: dwd_argothek_playermatchdetail_hi
+    fields:
+      tdbank_imp_date:
+        type: VARCHAR(65533)
+        primary_key: false
+        nullable: true
+        default: null
+        autoincrement: false
+        comment: ""
+        examples[5]: "2023072802","2024083000","2023072800","2023110200","2024032800"
+      dteventtime:
+        type: VARCHAR(65533)
+        primary_key: false
+        nullable: true
+        default: null
+        autoincrement: false
+        comment: ""
+        examples[5]: "2023-11-02 00:00:00","2023-07-28 00:00:00","2023-07-28 01:00:00","2023-07-28 03:00:00","2024-03-28 00:00:00"
+      apeventid:
+        type: VARCHAR(65533)
+        primary_key: false
+        nullable: true
+        default: null
+        autoincrement: false
+        comment: ""
+        examples[5]: 00000000-0000-0000-0000-000000000008,00000000-0000-0000-0000-000000000002,00000000-0000-0000-0000-000000000001,00000000-0000-0000-0000-000000000003,00000000-0000-0000-0000-000000000004
+      apchildid:
+        type: VARCHAR(65533)
+        primary_key: false
+        nullable: true
+        default: null
+        autoincrement: false
+        comment: ""
+        examples[5]: 00000000-0000-0000-0000-000000000006,00000000-0000-0000-0000-000000000002,00000000-0000-0000-0000-000000000001,00000000-0000-0000-0000-000000000003,00000000-0000-0000-0000-000000000008
+      apchildindex:
+        type: BIGINT
+        primary_key: false
+        nullable: true
+        default: null
+        autoincrement: false
+        comment: ""
+        examples[5]: "1","3","6","7","8"
+      subject:
+        type: VARCHAR(65533)
+        primary_key: false
+        nullable: true
+        default: null
+        autoincrement: false
+        comment: ""
+        examples[3]: USER_G,USER_A,USER_B
+      name:
+        type: VARCHAR(65533)
+        primary_key: false
+        nullable: true
+        default: null
+        autoincrement: false
+        comment: ""
+        examples[0]:
+      teamid:
+        type: VARCHAR(65533)
+        primary_key: false
+        nullable: true
+        default: null
+        autoincrement: false
+        comment: ""
+        examples[3]: USER_B,USER_A,USER_G
+      partyid:
+        type: VARCHAR(65533)
+        primary_key: false
+        nullable: true
+        default: null
+        autoincrement: false
+        comment: ""
+        examples[5]: 00000000-0000-0000-0000-0000000000p10,00000000-0000-0000-0000-0000000000p5,00000000-0000-0000-0000-0000000000p1,00000000-0000-0000-0000-0000000000p6,00000000-0000-0000-0000-0000000000p7
+      characterid:
+        type: VARCHAR(65533)
+        primary_key: false
+        nullable: true
+        default: null
+        autoincrement: false
+        comment: ""
+        examples[4]: e370fa57-4757-3604-3648-499e1f642d3f,1dbf2edd-4729-0984-3115-daa5eed44993,0e38b510-41a8-5780-5e8f-568b2a4f2d6c,cc8b64c8-4b25-4ff9-6e7f-37b4da43d235
+      competitivetier:
+        type: BIGINT
+        primary_key: false
+        nullable: true
+        default: null
+        autoincrement: false
+        comment: ""
+        examples[1]: "0"
+      statsscore:
+        type: DOUBLE
+        primary_key: false
+        nullable: true
+        default: null
+        autoincrement: false
+        comment: ""
+        examples[1]: "0.0"
+      statsroundsplayed:
+        type: BIGINT
+        primary_key: false
+        nullable: true
+        default: null
+        autoincrement: false
+        comment: ""
+        examples[1]: "0"
+      statskills:
+        type: DOUBLE
+        primary_key: false
+        nullable: true
+        default: null
+        autoincrement: false
+        comment: ""
+        examples[1]: "0.0"
+      statsdeaths:
+        type: DOUBLE
+        primary_key: false
+        nullable: true
+        default: null
+        autoincrement: false
+        comment: ""
+        examples[1]: "0.0"
+      statsassists:
+        type: DOUBLE
+        primary_key: false
+        nullable: true
+        default: null
+        autoincrement: false
+        comment: ""
+        examples[1]: "0.0"
+      statsplaytimemillis:
+        type: DOUBLE
+        primary_key: false
+        nullable: true
+        default: null
+        autoincrement: false
+        comment: ""
+        examples[1]: "0.0"
+      newexpr:
+        type: VARCHAR(65533)
+        primary_key: false
+        nullable: true
+        default: null
+        autoincrement: false
+        comment: ""
+        examples[0]:
+      matchid:
+        type: VARCHAR(65533)
+        primary_key: false
+        nullable: true
+        default: null
+        autoincrement: false
+        comment: ""
+        examples[5]: 00000000-0000-0000-0000-000000000005,00000000-0000-0000-0000-000000000001,00000000-0000-0000-0000-000000000010,00000000-0000-0000-0000-000000000004,00000000-0000-0000-0000-000000000002
+      mapid:
+        type: VARCHAR(65533)
+        primary_key: false
+        nullable: true
+        default: null
+        autoincrement: false
+        comment: ""
+        examples[1]: /Game/Maps/Port/Port
+      provisioningflowid:
+        type: VARCHAR(65533)
+        primary_key: false
+        nullable: true
+        default: null
+        autoincrement: false
+        comment: ""
+        examples[2]: Matchmaking,CustomGame
+      gamepodid:
+        type: VARCHAR(65533)
+        primary_key: false
+        nullable: true
+        default: null
+        autoincrement: false
+        comment: ""
+        examples[1]: pod1
+      gamelengthmillis:
+        type: DOUBLE
+        primary_key: false
+        nullable: true
+        default: null
+        autoincrement: false
+        comment: ""
+        examples[1]: "0.0"
+      gamestartmillis:
+        type: DOUBLE
+        primary_key: false
+        nullable: true
+        default: null
+        autoincrement: false
+        comment: ""
+        examples[1]: "0.0"
+      gameversion:
+        type: VARCHAR(65533)
+        primary_key: false
+        nullable: true
+        default: null
+        autoincrement: false
+        comment: ""
+        examples[1]: version1
+      iscompleted:
+        type: BIGINT
+        primary_key: false
+        nullable: true
+        default: null
+        autoincrement: false
+        comment: ""
+        examples[1]: "1"
+      customgamename:
+        type: VARCHAR(65533)
+        primary_key: false
+        nullable: true
+        default: null
+        autoincrement: false
+        comment: ""
+        examples[0]:
+      module:
+        type: VARCHAR(65533)
+        primary_key: false
+        nullable: true
+        default: null
+        autoincrement: false
+        comment: ""
+        examples[0]:
+      forcepostprocessing:
+        type: BIGINT
+        primary_key: false
+        nullable: true
+        default: null
+        autoincrement: false
+        comment: ""
+        examples[1]: "0"
+      queueid:
+        type: VARCHAR(65533)
+        primary_key: false
+        nullable: true
+        default: null
+        autoincrement: false
+        comment: ""
+        examples[1]: deathmatch
+      seasonid:
+        type: VARCHAR(65533)
+        primary_key: false
+        nullable: true
+        default: null
+        autoincrement: false
+        comment: ""
+        examples[1]: season1
+      completionstate:
+        type: VARCHAR(65533)
+        primary_key: false
+        nullable: true
+        default: null
+        autoincrement: false
+        comment: ""
+        examples[1]: Completed
+      ismatchsampled:
+        type: BIGINT
+        primary_key: false
+        nullable: true
+        default: null
+        autoincrement: false
+        comment: ""
+        examples[1]: "0"
+      statsabilitycastsgrenadecasts:
+        type: BIGINT
+        primary_key: false
+        nullable: true
+        default: null
+        autoincrement: false
+        comment: ""
+        examples[1]: "0"
+      statsabilitycastsability1casts:
+        type: BIGINT
+        primary_key: false
+        nullable: true
+        default: null
+        autoincrement: false
+        comment: ""
+        examples[1]: "0"
+      statsabilitycastsability2casts:
+        type: BIGINT
+        primary_key: false
+        nullable: true
+        default: null
+        autoincrement: false
+        comment: ""
+        examples[1]: "0"
+      statsabilitycastsultimatecasts:
+        type: BIGINT
+        primary_key: false
+        nullable: true
+        default: null
+        autoincrement: false
+        comment: ""
+        examples[1]: "0"
+      clientplatformdetailsplatformtype:
+        type: VARCHAR(65533)
+        primary_key: false
+        nullable: true
+        default: null
+        autoincrement: false
+        comment: ""
+        examples[1]: PC
+      newexprv2missions:
+        type: VARCHAR(65533)
+        primary_key: false
+        nullable: true
+        default: null
+        autoincrement: false
+        comment: ""
+        examples[0]:
+      newexprv2settingstatusissensitivitydefault:
+        type: BIGINT
+        primary_key: false
+        nullable: true
+        default: null
+        autoincrement: false
+        comment: ""
+        examples[1]: "0"
+      newexprv2settingstatusiscrosshairdefault:
+        type: BIGINT
+        primary_key: false
+        nullable: true
+        default: null
+        autoincrement: false
+        comment: ""
+        examples[1]: "0"
+    examples[0]:
+    comment: ""
+[参考信息]: 英雄筛选逻辑：
+英雄1上线日期：2023/07/26
+英雄2上线日期：2023/11/01
+英雄3上线日期：2024/03/27
+英雄4上线日期：2024/08/29
+英雄5上线日期：2025/01/09
+英雄6上线日期：2025/03/06
+英雄1对应id:"e370fa57-4757-3604-3648-499e1f642d3f","cc8b64c8-4b25-4ff9-6e7f-37b4da43d235"
+英雄2对应id:"0e38b510-41a8-5780-5e8f-568b2a4f2d6c"
+英雄3对应id:"1dbf2edd-4729-0984-3115-daa5eed44993"
+英雄4对应id:"efba5359-4016-a1e5-7626-b1ae76895940"
+英雄5对应id:"b444168c-4e35-8076-db47-ef9bf368f384"
+英雄6对应id:"df1cb487-4902-002e-5c17-d28e83e78588"
+
+对局筛选逻辑：
+provisioningflowid = "Matchmaking" -- 除自定义模式、新手、训练场外所有模式
+[通用知识]: ## 游戏常识说明
+- 砺刃使者、勇者盟约、峡谷行动 为游戏名，均为FPS游戏。乐园是砺刃使者下的UGC玩法模式，包含很多子玩法。
+- 手游大盘、平台大盘代表所有游戏集合。
+- 如果提到某游戏大盘，是指该游戏本身所有活跃用户，而不是全游戏。比如"砺刃大盘活跃"是指砺刃使者游戏的活跃。
+- 一个玩家id可能对应多个角色id。
+- 游戏玩家行为明细日志，通常会被叫成“流水”，通常表名的格式为：`dwd_gamecode_行为标识别_hi`。游戏玩家付费充值金额也会被叫成“流水”
+- 如果"用户问题"只提到'活跃'，没有明确说具体玩法模式的活跃，默认为游戏活跃，而不是游戏内具体某个玩法模式的活跃。
+
+## 常用指标说明
+- DAU：日活跃用户数
+- 留存：以次留为例，表示当天活跃第二天依然活跃的用户定义为次留，其他留存以此类推
+- 新进：注册
+
+## 数仓设计规范
+### 分层规范
+- DWD层用于存储玩家行为明细数据，每一条行为事件包含一条记录
+- DWS层用于存储玩家粒度或者进一步聚合粒度的数据
+- DIM代表维度配表
+
+### 命名规范
+以`dws_jordass_mode_roundrecord_di` 为例：
+  - `dws` 前缀代表分层
+  - `jordass` 代表gamecode
+  - `mode_roundrecord` 代表表业务含义
+  - `di` 后缀中，`d` 代表按天分区，`i` 代表每天存储增量数据。如果后缀是`df`，代表每天存储游戏开服至今的全量数据，使用时取时间周期最后一天即可
+
+### 字段规范
+- cbitmap：100位0和1组成的字符串，左侧第一位代表当天。1表示有对应行为，比如活跃或付费，0 表示未发生对应行为，比如未活跃或未付费。常常使用该字段统计流失、回流、留存等指标
+
+
+[涉及的表名列表]: ['dwd_argothek_playermatchdetail_hi']  

@@ -1,0 +1,307 @@
+你是一名StarRocks mysql 4.0.0专家，现在需要阅读并理解下面的[数据库schema]描述，以及可能用到的[参考信息]，并运用StarRocks mysql 4.0.0知识生成sql语句回答[用户问题]。
+[用户问题]: 统计流失14天以上的回流用户的点击量子鸟赠礼、回到大厅和参与乐园对局的数据
+统计日期
+2024/1/2
+2023/12/19
+2023/12/12
+2023/12/5
+2023/10/10
+2023/9/19
+2023/1/3
+2022/12/20
+输出：统计日（YYYYMMDD）、用户类型（'流失14天以上的回流用户'）、当天回流用户数、点击量子鸟赠礼用户数、回到大厅用户数、当天有参与乐园对局的用户数  
+[数据库schema]: [3]:
+  - table_name: dws_jordass_matchlog_stat_di
+    fields:
+      dtstatdate:
+        type: VARCHAR(65533)
+        primary_key: false
+        nullable: true
+        default: null
+        autoincrement: false
+        comment: ""
+        examples[5]: "20230718","20230919","20231010","20231031","20231212"
+      vgameappid:
+        type: VARCHAR(65533)
+        primary_key: false
+        nullable: true
+        default: null
+        autoincrement: false
+        comment: ""
+        examples[2]: qq,wx
+      platid:
+        type: BIGINT
+        primary_key: false
+        nullable: true
+        default: null
+        autoincrement: false
+        comment: ""
+        examples[3]: "255","1","0"
+      vplayerid:
+        type: VARCHAR(65533)
+        primary_key: false
+        nullable: true
+        default: null
+        autoincrement: false
+        comment: ""
+        examples[5]: user19_20241118,userA027,osewR0nF6cdu5eejUTBeWhkZpbj54,osewR0nF6cdu5eejUTBeWhkZpbj20,osewR0nF6cdu5eejUTBeWhkZpbj96
+      imode:
+        type: BIGINT
+        primary_key: false
+        nullable: true
+        default: null
+        autoincrement: false
+        comment: ""
+        examples[5]: "1251206313870885120","1313046652157690624","1344338933661592832","2000753","1281781308570207232"
+      teamnum:
+        type: BIGINT
+        primary_key: false
+        nullable: true
+        default: null
+        autoincrement: false
+        comment: ""
+        examples[5]: "4","1","2","3","0"
+      icnt:
+        type: BIGINT
+        primary_key: false
+        nullable: true
+        default: null
+        autoincrement: false
+        comment: ""
+        examples[5]: "3","10","21","1","2"
+      itemp1:
+        type: BIGINT
+        primary_key: false
+        nullable: true
+        default: null
+        autoincrement: false
+        comment: ""
+        examples[5]: "1156","0","727","334","1061"
+      itemp2:
+        type: BIGINT
+        primary_key: false
+        nullable: true
+        default: null
+        autoincrement: false
+        comment: ""
+        examples[1]: "0"
+      vtemp1:
+        type: VARCHAR(65533)
+        primary_key: false
+        nullable: true
+        default: null
+        autoincrement: false
+        comment: ""
+        examples[5]: B,"nan",temp,I,test
+      vtemp2:
+        type: VARCHAR(65533)
+        primary_key: false
+        nullable: true
+        default: null
+        autoincrement: false
+        comment: ""
+        examples[4]: O,I,P,M
+    examples[0]:
+    comment: ""
+  - table_name: dws_jordass_login_df
+    fields:
+      dtstatdate:
+        type: VARCHAR(65533)
+        primary_key: false
+        nullable: true
+        default: null
+        autoincrement: false
+        comment: ""
+        examples[5]: "20221211","20230707","20230710","20230713","20230719"
+      vgameappid:
+        type: VARCHAR(65533)
+        primary_key: false
+        nullable: true
+        default: null
+        autoincrement: false
+        comment: ""
+        examples[3]: G_qq,qq,wx
+      platid:
+        type: BIGINT
+        primary_key: false
+        nullable: true
+        default: null
+        autoincrement: false
+        comment: ""
+        examples[3]: "255","1","0"
+      vplayerid:
+        type: VARCHAR(65533)
+        primary_key: false
+        nullable: true
+        default: null
+        autoincrement: false
+        comment: ""
+        examples[5]: Z1CK8mMc,Rpf3d18g,28DBA9A9,1263291E,54222D60
+      cbitmap:
+        type: VARCHAR(65533)
+        primary_key: false
+        nullable: true
+        default: null
+        autoincrement: false
+        comment: ""
+        examples[5]: "0000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000","0000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000000000","0000000000000000000000000000000000000000000000000000111111111111111111111111001100001100001100000000","1100000110011010000001010000010010011111110000000000000000010001110100000001000000001100000000000011","0000000010000001000000000000000000000000000010000111000100000000000000000000001000000000000100000000"
+      dregdate:
+        type: VARCHAR(65533)
+        primary_key: false
+        nullable: true
+        default: null
+        autoincrement: false
+        comment: ""
+        examples[5]: "20230320","20190927","20181204","20220826","20190323"
+      ilevel:
+        type: BIGINT
+        primary_key: false
+        nullable: true
+        default: null
+        autoincrement: false
+        comment: ""
+        examples[4]: "6","11","10","12"
+      friendcount:
+        type: BIGINT
+        primary_key: false
+        nullable: true
+        default: null
+        autoincrement: false
+        comment: ""
+        examples[4]: "1","2","3","0"
+    examples[0]:
+    comment: ""
+  - table_name: dws_jordass_buttonpress_pre_di
+    fields:
+      dtstatdate:
+        type: VARCHAR(65533)
+        primary_key: false
+        nullable: true
+        default: null
+        autoincrement: false
+        comment: ""
+        examples[5]: "20211113","20211126","20211127","20211201","20240102"
+      dteventtime:
+        type: VARCHAR(65533)
+        primary_key: false
+        nullable: true
+        default: null
+        autoincrement: false
+        comment: ""
+        examples[5]: "2024-10-09 09:40:00","2021-11-05 10:00:00","2023-01-03 15:00:00","2021-11-05 11:30:00","2024-10-09 17:00:00"
+      vgameappid:
+        type: VARCHAR(65533)
+        primary_key: false
+        nullable: true
+        default: null
+        autoincrement: false
+        comment: ""
+        examples[2]: wx,qq
+      platid:
+        type: VARCHAR(65533)
+        primary_key: false
+        nullable: true
+        default: null
+        autoincrement: false
+        comment: ""
+        examples[3]: "1","0",极速版
+      izoneareaid:
+        type: VARCHAR(65533)
+        primary_key: false
+        nullable: true
+        default: null
+        autoincrement: false
+        comment: ""
+        examples[1]: "0"
+      clientversion:
+        type: VARCHAR(65533)
+        primary_key: false
+        nullable: true
+        default: null
+        autoincrement: false
+        comment: ""
+        examples[3]: "1.0",1.32.11.13955,1.0.0
+      vplayerid:
+        type: VARCHAR(65533)
+        primary_key: false
+        nullable: true
+        default: null
+        autoincrement: false
+        comment: ""
+        examples[5]: osewR0oEE6CI4pTPpWb79PcNbu4a,time1_user010,osewR0oEE6CI4pTPpWb79PcNbu4e1,playerid_1,user000011
+      uid:
+        type: VARCHAR(65533)
+        primary_key: false
+        nullable: true
+        default: null
+        autoincrement: false
+        comment: ""
+        examples[5]: "3521526696","2000000014","3521526748","3521526660","10006"
+      buttontype:
+        type: VARCHAR(65533)
+        primary_key: false
+        nullable: true
+        default: null
+        autoincrement: false
+        comment: ""
+        examples[5]: "400582","400211","400212","411111","10370"
+      ireason:
+        type: VARCHAR(65533)
+        primary_key: false
+        nullable: true
+        default: null
+        autoincrement: false
+        comment: ""
+        examples[5]: "1870672110699941888","1898764133710430976","1870740328144706560","1882866898840863488","-1"
+      extarg1:
+        type: VARCHAR(65533)
+        primary_key: false
+        nullable: true
+        default: null
+        autoincrement: false
+        comment: ""
+        examples[5]: "1361001494052096004","1361001494052096094","1361001494052096022","1361001494052096058","1361001494052096013"
+      extarg2:
+        type: VARCHAR(65533)
+        primary_key: false
+        nullable: true
+        default: null
+        autoincrement: false
+        comment: ""
+        examples[5]: 1100_17_1372945507064750416_recom,1318556691649789952_8_,1100_17_1372945507064750419_recom,''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''InResponse.IsValid(,1100_16_1372945507064750418_recom
+    examples[0]:
+    comment: ""
+[参考信息]: 点击量子鸟赠礼：buttontype =10370
+回到大厅：buttontype 10373或10374  
+流失14天以上的回流用户：统计日往前14天以上没有登陆游戏，在统计日登陆了游戏，比如统计日是2024-1-2，用户在2023-12-19到2024-1-1这14天连续没有登陆游戏，并且在2023-12-18及之前有登陆游戏，就是2024-1-2的流失14天以上的回流用户，其他统计日以此类推。
+[通用知识]: ## 游戏常识说明
+- 砺刃使者、勇者盟约、峡谷行动 为游戏名，均为FPS游戏。乐园是砺刃使者下的UGC玩法模式，包含很多子玩法。
+- 手游大盘、平台大盘代表所有游戏集合。
+- 如果提到某游戏大盘，是指该游戏本身所有活跃用户，而不是全游戏。比如"砺刃大盘活跃"是指砺刃使者游戏的活跃。
+- 一个玩家id可能对应多个角色id。
+- 游戏玩家行为明细日志，通常会被叫成“流水”，通常表名的格式为：`dwd_gamecode_行为标识别_hi`。游戏玩家付费充值金额也会被叫成“流水”
+- 如果"用户问题"只提到'活跃'，没有明确说具体玩法模式的活跃，默认为游戏活跃，而不是游戏内具体某个玩法模式的活跃。
+
+## 常用指标说明
+- DAU：日活跃用户数
+- 留存：以次留为例，表示当天活跃第二天依然活跃的用户定义为次留，其他留存以此类推
+- 新进：注册
+
+## 数仓设计规范
+### 分层规范
+- DWD层用于存储玩家行为明细数据，每一条行为事件包含一条记录
+- DWS层用于存储玩家粒度或者进一步聚合粒度的数据
+- DIM代表维度配表
+
+### 命名规范
+以`dws_jordass_mode_roundrecord_di` 为例：
+  - `dws` 前缀代表分层
+  - `jordass` 代表gamecode
+  - `mode_roundrecord` 代表表业务含义
+  - `di` 后缀中，`d` 代表按天分区，`i` 代表每天存储增量数据。如果后缀是`df`，代表每天存储游戏开服至今的全量数据，使用时取时间周期最后一天即可
+
+### 字段规范
+- cbitmap：100位0和1组成的字符串，左侧第一位代表当天。1表示有对应行为，比如活跃或付费，0 表示未发生对应行为，比如未活跃或未付费。常常使用该字段统计流失、回流、留存等指标
+
+
+[涉及的表名列表]: ['dws_jordass_matchlog_stat_di', 'dws_jordass_login_df', 'dws_jordass_buttonpress_pre_di']  

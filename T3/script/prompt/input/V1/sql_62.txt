@@ -1,0 +1,1016 @@
+你是一名StarRocks mysql 4.0.0专家，现在需要阅读并理解下面的[数据库schema]描述，以及可能用到的[参考信息]，并运用StarRocks mysql 4.0.0知识生成sql语句回答[用户问题]。
+[用户问题]: 统计20250226联盟前180日（包含当天）基础数据 说明：按照uid计算
+输出：统计日期（YYYYMMDD），角色DAU，联盟参与角色数，联盟完成特训任务角色数，联盟商店兑换次数  
+[数据库schema]: [5]:
+  - table_name: dwd_jordass_allianceshopbuy_hi
+    fields:
+      tdbank_imp_date:
+        type: VARCHAR(65533)
+        primary_key: false
+        nullable: true
+        default: null
+        autoincrement: false
+        comment: ""
+        examples[5]: "2024090200","2024090100","2024090300","2024083000","2024083001"
+      dteventtime:
+        type: VARCHAR(65533)
+        primary_key: false
+        nullable: true
+        default: null
+        autoincrement: false
+        comment: ""
+        examples[5]: "2024-08-30 01:00:00","2024-09-02 00:00:00","2024-09-03 00:00:00","2024-09-01 00:00:00","2024-08-30 00:00:00"
+      vgameappid:
+        type: VARCHAR(65533)
+        primary_key: false
+        nullable: true
+        default: null
+        autoincrement: false
+        comment: ""
+        examples[1]: wx
+      platid:
+        type: BIGINT
+        primary_key: false
+        nullable: true
+        default: null
+        autoincrement: false
+        comment: ""
+        examples[1]: "1"
+      izoneareaid:
+        type: BIGINT
+        primary_key: false
+        nullable: true
+        default: null
+        autoincrement: false
+        comment: ""
+        examples[1]: "0"
+      vplayerid:
+        type: VARCHAR(65533)
+        primary_key: false
+        nullable: true
+        default: null
+        autoincrement: false
+        comment: ""
+        examples[5]: playerid15,playerid12,playerid2,playerid4,playerid14
+      uid:
+        type: VARCHAR(65533)
+        primary_key: false
+        nullable: true
+        default: null
+        autoincrement: false
+        comment: ""
+        examples[5]: user3,user1,user12,user13,user2
+      addresresult:
+        type: BIGINT
+        primary_key: false
+        nullable: true
+        default: null
+        autoincrement: false
+        comment: ""
+        examples[1]: "1"
+      itemclass:
+        type: BIGINT
+        primary_key: false
+        nullable: true
+        default: null
+        autoincrement: false
+        comment: ""
+        examples[1]: "1"
+      itemid:
+        type: BIGINT
+        primary_key: false
+        nullable: true
+        default: null
+        autoincrement: false
+        comment: ""
+        examples[1]: "1001"
+      itemnum:
+        type: BIGINT
+        primary_key: false
+        nullable: true
+        default: null
+        autoincrement: false
+        comment: ""
+        examples[1]: "1"
+      corpslevel:
+        type: BIGINT
+        primary_key: false
+        nullable: true
+        default: null
+        autoincrement: false
+        comment: ""
+        examples[1]: "5"
+      corpsid:
+        type: VARCHAR(65533)
+        primary_key: false
+        nullable: true
+        default: null
+        autoincrement: false
+        comment: ""
+        examples[2]: corps2,corps1
+      consumeallmoney:
+        type: BIGINT
+        primary_key: false
+        nullable: true
+        default: null
+        autoincrement: false
+        comment: ""
+        examples[1]: "100"
+      buyitemlist:
+        type: VARCHAR(65533)
+        primary_key: false
+        nullable: true
+        default: null
+        autoincrement: false
+        comment: ""
+        examples[1]: item1
+    examples[0]:
+    comment: ""
+  - table_name: dwd_jordass_player_allianceactive_hi
+    fields:
+      tdbank_imp_date:
+        type: VARCHAR(65533)
+        primary_key: false
+        nullable: true
+        default: null
+        autoincrement: false
+        comment: ""
+        examples[5]: "2024090100","2025010208","2024083000","2025010102","2025010206"
+      dteventtime:
+        type: VARCHAR(65533)
+        primary_key: false
+        nullable: true
+        default: null
+        autoincrement: false
+        comment: ""
+        examples[5]: "2024-08-30 00:00:00","2024-09-01 00:00:00","2024-08-29 00:00:00","2025-01-01 04:00:00","2025-01-02 08:00:00"
+      izoneareaid:
+        type: BIGINT
+        primary_key: false
+        nullable: true
+        default: null
+        autoincrement: false
+        comment: ""
+        examples[1]: "0"
+      uid:
+        type: VARCHAR(65533)
+        primary_key: false
+        nullable: true
+        default: null
+        autoincrement: false
+        comment: ""
+        examples[5]: user11,"1006",user12,"1002",user1
+      corpsid:
+        type: VARCHAR(65533)
+        primary_key: false
+        nullable: true
+        default: null
+        autoincrement: false
+        comment: ""
+        examples[5]: corp3,corp7,corp5,corps1,corp1
+      active:
+        type: BIGINT
+        primary_key: false
+        nullable: true
+        default: null
+        autoincrement: false
+        comment: ""
+        examples[2]: "10","1"
+      allianceforceteractive:
+        type: BIGINT
+        primary_key: false
+        nullable: true
+        default: null
+        autoincrement: false
+        comment: ""
+        examples[2]: "1","20"
+      reason:
+        type: BIGINT
+        primary_key: false
+        nullable: true
+        default: null
+        autoincrement: false
+        comment: ""
+        examples[1]: "1"
+      vgameappid:
+        type: VARCHAR(65533)
+        primary_key: false
+        nullable: true
+        default: null
+        autoincrement: false
+        comment: ""
+        examples[2]: qq,wx
+    examples[0]:
+    comment: ""
+  - table_name: dwd_jordass_alliancebootcamprecord_hi
+    fields:
+      tdbank_imp_date:
+        type: VARCHAR(65533)
+        primary_key: false
+        nullable: true
+        default: null
+        autoincrement: false
+        comment: ""
+        examples[5]: "2024083000","2024090300","2024090200","2024083100","2024090100"
+      corpssvrid:
+        type: VARCHAR(65533)
+        primary_key: false
+        nullable: true
+        default: null
+        autoincrement: false
+        comment: ""
+        examples[1]: svr1
+      dteventtime:
+        type: VARCHAR(65533)
+        primary_key: false
+        nullable: true
+        default: null
+        autoincrement: false
+        comment: ""
+        examples[5]: "2024-08-31 00:00:00","2024-09-03 00:00:00","2024-08-30 00:00:00","2024-09-01 00:00:00","2024-09-02 00:00:00"
+      vgameappid:
+        type: VARCHAR(65533)
+        primary_key: false
+        nullable: true
+        default: null
+        autoincrement: false
+        comment: ""
+        examples[1]: wx
+      izoneareaid:
+        type: BIGINT
+        primary_key: false
+        nullable: true
+        default: null
+        autoincrement: false
+        comment: ""
+        examples[1]: "0"
+      corpsid:
+        type: VARCHAR(65533)
+        primary_key: false
+        nullable: true
+        default: null
+        autoincrement: false
+        comment: ""
+        examples[2]: corps2,corps1
+      memberuid:
+        type: VARCHAR(65533)
+        primary_key: false
+        nullable: true
+        default: null
+        autoincrement: false
+        comment: ""
+        examples[5]: user14,user15,user4,user1,user5
+      trainid:
+        type: BIGINT
+        primary_key: false
+        nullable: true
+        default: null
+        autoincrement: false
+        comment: ""
+        examples[1]: "1"
+      taskid:
+        type: BIGINT
+        primary_key: false
+        nullable: true
+        default: null
+        autoincrement: false
+        comment: ""
+        examples[1]: "1001"
+    examples[0]:
+    comment: ""
+  - table_name: dwd_jordass_playerlogout_hi
+    fields:
+      tdbank_imp_date:
+        type: VARCHAR(65533)
+        primary_key: false
+        nullable: true
+        default: null
+        autoincrement: false
+        comment: ""
+        examples[5]: "2024090200","2024083000","2024090300","2024090100","2024083100"
+      gamesvrid:
+        type: VARCHAR(65533)
+        primary_key: false
+        nullable: true
+        default: null
+        autoincrement: false
+        comment: ""
+        examples[1]: svr1
+      dteventtime:
+        type: VARCHAR(65533)
+        primary_key: false
+        nullable: true
+        default: null
+        autoincrement: false
+        comment: ""
+        examples[5]: "2024-08-31 00:00:00","2024-09-03 00:00:00","2024-08-30 00:00:00","2024-09-01 00:00:00","2024-09-02 00:00:00"
+      vgameappid:
+        type: VARCHAR(65533)
+        primary_key: false
+        nullable: true
+        default: null
+        autoincrement: false
+        comment: ""
+        examples[1]: wx
+      platid:
+        type: BIGINT
+        primary_key: false
+        nullable: true
+        default: null
+        autoincrement: false
+        comment: ""
+        examples[1]: "1"
+      izoneareaid:
+        type: BIGINT
+        primary_key: false
+        nullable: true
+        default: null
+        autoincrement: false
+        comment: ""
+        examples[1]: "0"
+      vplayerid:
+        type: VARCHAR(65533)
+        primary_key: false
+        nullable: true
+        default: null
+        autoincrement: false
+        comment: ""
+        examples[5]: playerid6,playerid9,playerid10,playerid7,playerid8
+      uid:
+        type: VARCHAR(65533)
+        primary_key: false
+        nullable: true
+        default: null
+        autoincrement: false
+        comment: ""
+        examples[5]: user6,user9,user10,user7,user8
+      onlinetime:
+        type: BIGINT
+        primary_key: false
+        nullable: true
+        default: null
+        autoincrement: false
+        comment: ""
+        examples[1]: "100"
+      level:
+        type: BIGINT
+        primary_key: false
+        nullable: true
+        default: null
+        autoincrement: false
+        comment: ""
+        examples[1]: "10"
+      playerfriendsnum:
+        type: BIGINT
+        primary_key: false
+        nullable: true
+        default: null
+        autoincrement: false
+        comment: ""
+        examples[1]: "5"
+      clientversion:
+        type: VARCHAR(65533)
+        primary_key: false
+        nullable: true
+        default: null
+        autoincrement: false
+        comment: ""
+        examples[1]: v1.0
+      loginchannel:
+        type: BIGINT
+        primary_key: false
+        nullable: true
+        default: null
+        autoincrement: false
+        comment: ""
+        examples[1]: "1"
+      deviceid:
+        type: VARCHAR(65533)
+        primary_key: false
+        nullable: true
+        default: null
+        autoincrement: false
+        comment: ""
+        examples[1]: dev001
+      ticket:
+        type: BIGINT
+        primary_key: false
+        nullable: true
+        default: null
+        autoincrement: false
+        comment: ""
+        examples[1]: "100"
+      itemcoin:
+        type: BIGINT
+        primary_key: false
+        nullable: true
+        default: null
+        autoincrement: false
+        comment: ""
+        examples[1]: "50"
+      luckycoin:
+        type: BIGINT
+        primary_key: false
+        nullable: true
+        default: null
+        autoincrement: false
+        comment: ""
+        examples[1]: "10"
+      ironcoin:
+        type: BIGINT
+        primary_key: false
+        nullable: true
+        default: null
+        autoincrement: false
+        comment: ""
+        examples[1]: "5"
+      diamond:
+        type: BIGINT
+        primary_key: false
+        nullable: true
+        default: null
+        autoincrement: false
+        comment: ""
+        examples[1]: "100"
+      corpsid:
+        type: VARCHAR(65533)
+        primary_key: false
+        nullable: true
+        default: null
+        autoincrement: false
+        comment: ""
+        examples[1]: corps1
+      corpsname:
+        type: VARCHAR(65533)
+        primary_key: false
+        nullable: true
+        default: null
+        autoincrement: false
+        comment: ""
+        examples[1]: CorpsA
+      clannum:
+        type: BIGINT
+        primary_key: false
+        nullable: true
+        default: null
+        autoincrement: false
+        comment: ""
+        examples[1]: "1"
+      clanid1:
+        type: BIGINT
+        primary_key: false
+        nullable: true
+        default: null
+        autoincrement: false
+        comment: ""
+        examples[1]: "101"
+      clanid2:
+        type: BIGINT
+        primary_key: false
+        nullable: true
+        default: null
+        autoincrement: false
+        comment: ""
+        examples[1]: "0"
+      clanid3:
+        type: BIGINT
+        primary_key: false
+        nullable: true
+        default: null
+        autoincrement: false
+        comment: ""
+        examples[1]: "0"
+      logoutreason:
+        type: VARCHAR(65533)
+        primary_key: false
+        nullable: true
+        default: null
+        autoincrement: false
+        comment: ""
+        examples[1]: logout
+      gameid:
+        type: VARCHAR(65533)
+        primary_key: false
+        nullable: true
+        default: null
+        autoincrement: false
+        comment: ""
+        examples[1]: game1
+      rolesettingstr:
+        type: VARCHAR(65533)
+        primary_key: false
+        nullable: true
+        default: null
+        autoincrement: false
+        comment: ""
+        examples[1]: settings
+      historytotalcharm:
+        type: BIGINT
+        primary_key: false
+        nullable: true
+        default: null
+        autoincrement: false
+        comment: ""
+        examples[1]: "500"
+      device_type:
+        type: BIGINT
+        primary_key: false
+        nullable: true
+        default: null
+        autoincrement: false
+        comment: ""
+        examples[1]: "0"
+      clientostype:
+        type: VARCHAR(65533)
+        primary_key: false
+        nullable: true
+        default: null
+        autoincrement: false
+        comment: ""
+        examples[1]: and
+    examples[0]:
+    comment: ""
+  - table_name: dwd_jordass_playerlogin_hi
+    fields:
+      tdbank_imp_date:
+        type: VARCHAR(65533)
+        primary_key: false
+        nullable: true
+        default: null
+        autoincrement: false
+        comment: ""
+        examples[5]: "2020101500","2022042500","2023062010","2024090218","2024090300"
+      dteventtime:
+        type: VARCHAR(65533)
+        primary_key: false
+        nullable: true
+        default: null
+        autoincrement: false
+        comment: ""
+        examples[4]: "2021-03-15 13:00:00","2022-04-22 19:00:00","2021-03-25 15:00:00","2022-04-10 17:00:00"
+      vgameappid:
+        type: VARCHAR(65533)
+        primary_key: false
+        nullable: true
+        default: null
+        autoincrement: false
+        comment: ""
+        examples[2]: qq,wx
+      platid:
+        type: BIGINT
+        primary_key: false
+        nullable: true
+        default: null
+        autoincrement: false
+        comment: ""
+        examples[1]: "1"
+      izoneareaid:
+        type: BIGINT
+        primary_key: false
+        nullable: true
+        default: null
+        autoincrement: false
+        comment: ""
+        examples[1]: "0"
+      vplayerid:
+        type: VARCHAR(65533)
+        primary_key: false
+        nullable: true
+        default: null
+        autoincrement: false
+        comment: ""
+        examples[5]: P12,P7,user13,user_20240902_40,user_20250908_36
+      uid:
+        type: VARCHAR(65533)
+        primary_key: false
+        nullable: true
+        default: null
+        autoincrement: false
+        comment: ""
+        examples[4]: "3818485283","3818485276","3818485290",user2
+      level:
+        type: BIGINT
+        primary_key: false
+        nullable: true
+        default: null
+        autoincrement: false
+        comment: ""
+        examples[4]: "22","24","28","32"
+      playerfriendsnum:
+        type: BIGINT
+        primary_key: false
+        nullable: true
+        default: null
+        autoincrement: false
+        comment: ""
+        examples[4]: "6","7","8","4"
+      clientversion:
+        type: VARCHAR(65533)
+        primary_key: false
+        nullable: true
+        default: null
+        autoincrement: false
+        comment: ""
+        examples[2]: v1.0,1.32.11.13961
+      screenwidth:
+        type: BIGINT
+        primary_key: false
+        nullable: true
+        default: null
+        autoincrement: false
+        comment: ""
+        examples[2]: "1080","1520"
+      screenhight:
+        type: BIGINT
+        primary_key: false
+        nullable: true
+        default: null
+        autoincrement: false
+        comment: ""
+        examples[2]: "720","1920"
+      density:
+        type: VARCHAR(65533)
+        primary_key: false
+        nullable: true
+        default: null
+        autoincrement: false
+        comment: ""
+        examples[2]: high,"0"
+      loginchannel:
+        type: BIGINT
+        primary_key: false
+        nullable: true
+        default: null
+        autoincrement: false
+        comment: ""
+        examples[2]: "10017385","1001"
+      vroleid:
+        type: VARCHAR(65533)
+        primary_key: false
+        nullable: true
+        default: null
+        autoincrement: false
+        comment: ""
+        examples[4]: "3818485290","3818485283","3818485276","3818485279"
+      vrolename:
+        type: VARCHAR(65533)
+        primary_key: false
+        nullable: true
+        default: null
+        autoincrement: false
+        comment: ""
+        examples[4]: PlayerV,PlayerZ,PlayerU,PlayerY_3
+      deviceid:
+        type: VARCHAR(65533)
+        primary_key: false
+        nullable: true
+        default: null
+        autoincrement: false
+        comment: ""
+        examples[4]: dev008,971717f5cebcb649,971717f5cebcb661,971717f5cebcb647
+      device_type:
+        type: BIGINT
+        primary_key: false
+        nullable: true
+        default: null
+        autoincrement: false
+        comment: ""
+        examples[1]: "0"
+      gender:
+        type: BIGINT
+        primary_key: false
+        nullable: true
+        default: null
+        autoincrement: false
+        comment: ""
+        examples[2]: "1","2"
+      emulatorname:
+        type: VARCHAR(65533)
+        primary_key: false
+        nullable: true
+        default: null
+        autoincrement: false
+        comment: ""
+        examples[2]: NoEmulator,No
+      warzoneid:
+        type: BIGINT
+        primary_key: false
+        nullable: true
+        default: null
+        autoincrement: false
+        comment: ""
+        examples[2]: "350703","100"
+      devicename:
+        type: VARCHAR(65533)
+        primary_key: false
+        nullable: true
+        default: null
+        autoincrement: false
+        comment: ""
+        examples[4]: Device19,Device3,Device5,Device1
+      historymaxsegment:
+        type: BIGINT
+        primary_key: false
+        nullable: true
+        default: null
+        autoincrement: false
+        comment: ""
+        examples[4]: "500","504","502","516"
+      seasonmaxsegment:
+        type: BIGINT
+        primary_key: false
+        nullable: true
+        default: null
+        autoincrement: false
+        comment: ""
+        examples[4]: "400","7","3","505"
+      firstlogincg:
+        type: BIGINT
+        primary_key: false
+        nullable: true
+        default: null
+        autoincrement: false
+        comment: ""
+        examples[4]: "1600000000","1735707220","1735707227","1735707234"
+      lobbybgid:
+        type: BIGINT
+        primary_key: false
+        nullable: true
+        default: null
+        autoincrement: false
+        comment: ""
+        examples[2]: "1","1801004"
+      signature:
+        type: VARCHAR(65533)
+        primary_key: false
+        nullable: true
+        default: null
+        autoincrement: false
+        comment: ""
+        examples[0]:
+      devicelevel:
+        type: BIGINT
+        primary_key: false
+        nullable: true
+        default: null
+        autoincrement: false
+        comment: ""
+        examples[1]: "0"
+      iswxrealname:
+        type: BIGINT
+        primary_key: false
+        nullable: true
+        default: null
+        autoincrement: false
+        comment: ""
+        examples[1]: "1"
+      iswxlowlv:
+        type: BIGINT
+        primary_key: false
+        nullable: true
+        default: null
+        autoincrement: false
+        comment: ""
+        examples[1]: "2"
+      iszombie:
+        type: BIGINT
+        primary_key: false
+        nullable: true
+        default: null
+        autoincrement: false
+        comment: ""
+        examples[1]: "2"
+      topsegtimes:
+        type: BIGINT
+        primary_key: false
+        nullable: true
+        default: null
+        autoincrement: false
+        comment: ""
+        examples[2]: "-2","10"
+      clanid1:
+        type: BIGINT
+        primary_key: false
+        nullable: true
+        default: null
+        autoincrement: false
+        comment: ""
+        examples[1]: "0"
+      clanid2:
+        type: BIGINT
+        primary_key: false
+        nullable: true
+        default: null
+        autoincrement: false
+        comment: ""
+        examples[1]: "0"
+      clanid3:
+        type: BIGINT
+        primary_key: false
+        nullable: true
+        default: null
+        autoincrement: false
+        comment: ""
+        examples[1]: "0"
+      fpslevel:
+        type: BIGINT
+        primary_key: false
+        nullable: true
+        default: null
+        autoincrement: false
+        comment: ""
+        examples[2]: "2","3"
+      renderqualityapply:
+        type: BIGINT
+        primary_key: false
+        nullable: true
+        default: null
+        autoincrement: false
+        comment: ""
+        examples[1]: "1"
+      devicetcqualitygrade:
+        type: BIGINT
+        primary_key: false
+        nullable: true
+        default: null
+        autoincrement: false
+        comment: ""
+        examples[1]: "2"
+      relogin:
+        type: BIGINT
+        primary_key: false
+        nullable: true
+        default: null
+        autoincrement: false
+        comment: ""
+        examples[1]: "0"
+      gameid:
+        type: VARCHAR(65533)
+        primary_key: false
+        nullable: true
+        default: null
+        autoincrement: false
+        comment: ""
+        examples[2]: "0",game1
+      startime:
+        type: BIGINT
+        primary_key: false
+        nullable: true
+        default: null
+        autoincrement: false
+        comment: ""
+        examples[1]: "0"
+      rolesettingstr:
+        type: VARCHAR(65533)
+        primary_key: false
+        nullable: true
+        default: null
+        autoincrement: false
+        comment: ""
+        examples[2]: settings,0+0+0+0+0+0+0+0+0+0+0+0+0+0+0+0+0+0+1
+      creditscore:
+        type: VARCHAR(65533)
+        primary_key: false
+        nullable: true
+        default: null
+        autoincrement: false
+        comment: ""
+        examples[1]: "100"
+      usenewpickup:
+        type: BIGINT
+        primary_key: false
+        nullable: true
+        default: null
+        autoincrement: false
+        comment: ""
+        examples[1]: "1"
+      isqrlogin:
+        type: BIGINT
+        primary_key: false
+        nullable: true
+        default: null
+        autoincrement: false
+        comment: ""
+        examples[1]: "0"
+      is_gamematrix:
+        type: BIGINT
+        primary_key: false
+        nullable: true
+        default: null
+        autoincrement: false
+        comment: ""
+        examples[1]: "0"
+      clientsceneversion:
+        type: VARCHAR(65533)
+        primary_key: false
+        nullable: true
+        default: null
+        autoincrement: false
+        comment: ""
+        examples[2]: v1.0,0.0.0.0
+      whitetype:
+        type: BIGINT
+        primary_key: false
+        nullable: true
+        default: null
+        autoincrement: false
+        comment: ""
+        examples[1]: "0"
+      mobiletablettype:
+        type: BIGINT
+        primary_key: false
+        nullable: true
+        default: null
+        autoincrement: false
+        comment: ""
+        examples[1]: "0"
+      behaviorlevel:
+        type: BIGINT
+        primary_key: false
+        nullable: true
+        default: null
+        autoincrement: false
+        comment: ""
+        examples[1]: "5"
+      clientostype:
+        type: VARCHAR(65533)
+        primary_key: false
+        nullable: true
+        default: null
+        autoincrement: false
+        comment: ""
+        examples[2]: and,Android
+      pclogintype:
+        type: BIGINT
+        primary_key: false
+        nullable: true
+        default: null
+        autoincrement: false
+        comment: ""
+        examples[1]: "0"
+      escapecoincount:
+        type: VARCHAR(65533)
+        primary_key: false
+        nullable: true
+        default: null
+        autoincrement: false
+        comment: ""
+        examples[2]: "161274256","100"
+      vsteamlevel:
+        type: BIGINT
+        primary_key: false
+        nullable: true
+        default: null
+        autoincrement: false
+        comment: ""
+        examples[2]: "50","38"
+      connectidx:
+        type: BIGINT
+        primary_key: false
+        nullable: true
+        default: null
+        autoincrement: false
+        comment: ""
+        examples[4]: "3971667","1013","1010","3971671"
+      isinds:
+        type: BIGINT
+        primary_key: false
+        nullable: true
+        default: null
+        autoincrement: false
+        comment: ""
+        examples[1]: "0"
+    examples[0]:
+    comment: ""
+[参考信息]: 
+[通用知识]: ## 游戏常识说明
+- 砺刃使者、勇者盟约、峡谷行动 为游戏名，均为FPS游戏。乐园是砺刃使者下的UGC玩法模式，包含很多子玩法。
+- 手游大盘、平台大盘代表所有游戏集合。
+- 如果提到某游戏大盘，是指该游戏本身所有活跃用户，而不是全游戏。比如"砺刃大盘活跃"是指砺刃使者游戏的活跃。
+- 一个玩家id可能对应多个角色id。
+- 游戏玩家行为明细日志，通常会被叫成“流水”，通常表名的格式为：`dwd_gamecode_行为标识别_hi`。游戏玩家付费充值金额也会被叫成“流水”
+- 如果"用户问题"只提到'活跃'，没有明确说具体玩法模式的活跃，默认为游戏活跃，而不是游戏内具体某个玩法模式的活跃。
+
+## 常用指标说明
+- DAU：日活跃用户数
+- 留存：以次留为例，表示当天活跃第二天依然活跃的用户定义为次留，其他留存以此类推
+- 新进：注册
+
+## 数仓设计规范
+### 分层规范
+- DWD层用于存储玩家行为明细数据，每一条行为事件包含一条记录
+- DWS层用于存储玩家粒度或者进一步聚合粒度的数据
+- DIM代表维度配表
+
+### 命名规范
+以`dws_jordass_mode_roundrecord_di` 为例：
+  - `dws` 前缀代表分层
+  - `jordass` 代表gamecode
+  - `mode_roundrecord` 代表表业务含义
+  - `di` 后缀中，`d` 代表按天分区，`i` 代表每天存储增量数据。如果后缀是`df`，代表每天存储游戏开服至今的全量数据，使用时取时间周期最后一天即可
+
+### 字段规范
+- cbitmap：100位0和1组成的字符串，左侧第一位代表当天。1表示有对应行为，比如活跃或付费，0 表示未发生对应行为，比如未活跃或未付费。常常使用该字段统计流失、回流、留存等指标
+
+
+[涉及的表名列表]: ['dwd_jordass_allianceshopbuy_hi', 'dwd_jordass_player_allianceactive_hi', 'dwd_jordass_alliancebootcamprecord_hi', 'dwd_jordass_playerlogout_hi', 'dwd_jordass_playerlogin_hi']  

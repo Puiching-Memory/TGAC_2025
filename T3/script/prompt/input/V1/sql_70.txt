@@ -1,0 +1,185 @@
+你是一名StarRocks mysql 4.0.0专家，现在需要阅读并理解下面的[数据库schema]描述，以及可能用到的[参考信息]，并运用StarRocks mysql 4.0.0知识生成sql语句回答[用户问题]。
+[用户问题]: 统计2024.11.29-2024.12.19期间，不同抽奖档位的对应人数
+输出 抽奖档位（含汇总档位），人数  
+[数据库schema]: [1]:
+  - table_name: dwd_jordass_activity_rewardrecord_hi
+    fields:
+      tdbank_imp_date:
+        type: VARCHAR(65533)
+        primary_key: false
+        nullable: true
+        default: null
+        autoincrement: false
+        comment: ""
+        examples[5]: "2024112800","2024121000","2024121020","2022041500","2024120500"
+      gamesvrid:
+        type: VARCHAR(65533)
+        primary_key: false
+        nullable: true
+        default: null
+        autoincrement: false
+        comment: ""
+        examples[1]: SVR01
+      dteventtime:
+        type: VARCHAR(65533)
+        primary_key: false
+        nullable: true
+        default: null
+        autoincrement: false
+        comment: ""
+        examples[5]: "2024-12-01 00:05:00","2024-12-01 00:30:10","2024-11-28 00:10:20","2024-12-10 00:50:40","2024-12-10 20:10:00"
+      vgameappid:
+        type: VARCHAR(65533)
+        primary_key: false
+        nullable: true
+        default: null
+        autoincrement: false
+        comment: ""
+        examples[2]: qq,wx
+      platid:
+        type: BIGINT
+        primary_key: false
+        nullable: true
+        default: null
+        autoincrement: false
+        comment: ""
+        examples[2]: "0","1"
+      izoneareaid:
+        type: BIGINT
+        primary_key: false
+        nullable: true
+        default: null
+        autoincrement: false
+        comment: ""
+        examples[3]: "2002","1001","2"
+      vplayerid:
+        type: VARCHAR(65533)
+        primary_key: false
+        nullable: true
+        default: null
+        autoincrement: false
+        comment: ""
+        examples[5]: user09,user11,user10,user02,user01
+      uid:
+        type: VARCHAR(65533)
+        primary_key: false
+        nullable: true
+        default: null
+        autoincrement: false
+        comment: ""
+        examples[4]: "1006","1001","1002",UID10006
+      actid:
+        type: BIGINT
+        primary_key: false
+        nullable: true
+        default: null
+        autoincrement: false
+        comment: ""
+        examples[3]: "9999999999","2411291018","2201123904"
+      acttype:
+        type: BIGINT
+        primary_key: false
+        nullable: true
+        default: null
+        autoincrement: false
+        comment: ""
+        examples[2]: "10160","10045"
+      awardidx:
+        type: BIGINT
+        primary_key: false
+        nullable: true
+        default: null
+        autoincrement: false
+        comment: ""
+        examples[4]: "4","1","2","3"
+      awardcnt:
+        type: BIGINT
+        primary_key: false
+        nullable: true
+        default: null
+        autoincrement: false
+        comment: ""
+        examples[1]: "1"
+      value:
+        type: BIGINT
+        primary_key: false
+        nullable: true
+        default: null
+        autoincrement: false
+        comment: ""
+        examples[4]: "100","0","50","150"
+      reissueflag:
+        type: BIGINT
+        primary_key: false
+        nullable: true
+        default: null
+        autoincrement: false
+        comment: ""
+        examples[1]: "0"
+      cond1:
+        type: BIGINT
+        primary_key: false
+        nullable: true
+        default: null
+        autoincrement: false
+        comment: ""
+        examples[4]: "3","5","1","2"
+      cond2:
+        type: BIGINT
+        primary_key: false
+        nullable: true
+        default: null
+        autoincrement: false
+        comment: ""
+        examples[2]: "2","6"
+      cond3:
+        type: BIGINT
+        primary_key: false
+        nullable: true
+        default: null
+        autoincrement: false
+        comment: ""
+        examples[4]: "2000","4000","1000","300000"
+      device_type:
+        type: BIGINT
+        primary_key: false
+        nullable: true
+        default: null
+        autoincrement: false
+        comment: ""
+        examples[2]: "0","1"
+    examples[0]:
+    comment: ""
+[参考信息]: 抽奖活动：actid = 2411291018
+汇总：额外计算一个全档位统计组
+[通用知识]: ## 游戏常识说明
+- 砺刃使者、勇者盟约、峡谷行动 为游戏名，均为FPS游戏。乐园是砺刃使者下的UGC玩法模式，包含很多子玩法。
+- 手游大盘、平台大盘代表所有游戏集合。
+- 如果提到某游戏大盘，是指该游戏本身所有活跃用户，而不是全游戏。比如"砺刃大盘活跃"是指砺刃使者游戏的活跃。
+- 一个玩家id可能对应多个角色id。
+- 游戏玩家行为明细日志，通常会被叫成“流水”，通常表名的格式为：`dwd_gamecode_行为标识别_hi`。游戏玩家付费充值金额也会被叫成“流水”
+- 如果"用户问题"只提到'活跃'，没有明确说具体玩法模式的活跃，默认为游戏活跃，而不是游戏内具体某个玩法模式的活跃。
+
+## 常用指标说明
+- DAU：日活跃用户数
+- 留存：以次留为例，表示当天活跃第二天依然活跃的用户定义为次留，其他留存以此类推
+- 新进：注册
+
+## 数仓设计规范
+### 分层规范
+- DWD层用于存储玩家行为明细数据，每一条行为事件包含一条记录
+- DWS层用于存储玩家粒度或者进一步聚合粒度的数据
+- DIM代表维度配表
+
+### 命名规范
+以`dws_jordass_mode_roundrecord_di` 为例：
+  - `dws` 前缀代表分层
+  - `jordass` 代表gamecode
+  - `mode_roundrecord` 代表表业务含义
+  - `di` 后缀中，`d` 代表按天分区，`i` 代表每天存储增量数据。如果后缀是`df`，代表每天存储游戏开服至今的全量数据，使用时取时间周期最后一天即可
+
+### 字段规范
+- cbitmap：100位0和1组成的字符串，左侧第一位代表当天。1表示有对应行为，比如活跃或付费，0 表示未发生对应行为，比如未活跃或未付费。常常使用该字段统计流失、回流、留存等指标
+
+
+[涉及的表名列表]: ['dwd_jordass_activity_rewardrecord_hi']  
