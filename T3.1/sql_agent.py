@@ -13,14 +13,16 @@ import json
 import re
 import time
 from collections import Counter
+from datetime import date, datetime
+from decimal import Decimal
 from pathlib import Path
+import threading
 from typing import Any, Dict, List, Literal, Optional, cast
 from urllib.parse import quote_plus
 
 import pandas as pd
 import termcolor
 from langchain.chat_models import init_chat_model
-from langchain_community.tools.sql_database.tool import QuerySQLDatabaseTool
 from langchain_community.utilities import SQLDatabase
 from langchain_core.messages import AnyMessage, BaseMessage, HumanMessage
 from langchain_core.prompts import ChatPromptTemplate
@@ -43,13 +45,31 @@ DEFAULT_MYSQL_PORT = 9030
 DEFAULT_MYSQL_DATABASE = "database_main"
 
 DEBUG_PROMPT_DIR = Path("T3/script/prompt/input/V1")
-DEBUG_PROMPT_LIMIT = 3
+DEBUG_PROMPT_LIMIT = 1
 DEBUG_DB_URL: Optional[str] = None
 SCHEMA_DIR = Path("T3/data")
 
 DEFAULT_OPENAI_MODEL = "qwen3-coder-plus-2025-09-23"
 DEFAULT_OPENAI_API_BASE = "https://dashscope.aliyuncs.com/compatible-mode/v1"
 DEFAULT_OPENAI_API_KEY = "sk-21f31afa708c4c6f9bf6b73585788e41"
+
+REPO_ROOT = Path(__file__).resolve().parent.parent
+RESULT_OUTPUT_PATH = REPO_ROOT / "T3" / "upload" / "dataset_exe_result.json"
+MAX_LOGGED_ROWS = 200
+
+
+def _json_default(value: Any) -> Any:
+    if isinstance(value, (datetime, date)):
+        return value.isoformat()
+    if isinstance(value, Decimal):
+        if value == value.to_integral_value():
+            return int(value)
+        return float(value)
+    if isinstance(value, (set, tuple)):
+        return list(value)
+    if isinstance(value, bytes):
+        return value.decode("utf-8", errors="ignore")
+    return str(value)
 
 
 def resolve_db_url(task: Dict[str, Any]) -> Optional[str]:
@@ -236,6 +256,9 @@ class State(MessagesState):
     question: str
     query: str
     execution: str
+    execution_payload: Any
+    execution_error: Optional[str]
+    execution_success: bool
     answer: str
     feedback: str
     num_turns: int
@@ -266,6 +289,8 @@ class SQLAgent:
         execution_truncate: int = 2048,
     ):
         self.db = SQLDatabase.from_uri(db)  # type: ignore
+        self.db_uri = db
+        self._engine = create_engine(db)
         inferred_db_id = self._infer_db_id(db)
         self.db_schema = db_schema or load_schema_for_db(inferred_db_id)
         self.debug = debug
@@ -374,14 +399,53 @@ class SQLAgent:
 
     def execute_query(self, state: State) -> State:
         """Execute SQL query."""
-        execute_query_tool = QuerySQLDatabaseTool(db=self.db)
-        execution_result = execute_query_tool.invoke(state["query"])  # type: ignore
-        if not isinstance(execution_result, str):
-            # Convert to string if it's not already
-            execution_result = str(execution_result)
+        query = state.get("query")
+        if not query:
+            message = "No query available to execute."
+            truncated = self.truncate_execuion(message)
+            return {
+                **state,
+                "execution": truncated,
+                "execution_payload": None,
+                "execution_error": message,
+                "execution_success": False,
+            }
+
+        try:
+            with self._engine.connect() as connection:
+                dataframe = pd.read_sql_query(text(query), connection)
+        except Exception as exc:
+            error_message = str(exc)
+            truncated = self.truncate_execuion(error_message)
+            if self.debug:
+                termcolor.cprint(truncated, "yellow")
+            return {
+                **state,
+                "execution": truncated,
+                "execution_payload": None,
+                "execution_error": error_message,
+                "execution_success": False,
+            }
+
+        sanitized = dataframe.astype(object).where(pd.notnull(dataframe), None)
+        payload = sanitized.to_dict(orient="records")
+        if isinstance(payload, list) and len(payload) > MAX_LOGGED_ROWS:
+            payload = payload[:MAX_LOGGED_ROWS]
+
+        preview_rows = payload[:5] if isinstance(payload, list) else payload
+        preview_text = json.dumps(preview_rows, ensure_ascii=False, default=_json_default)
+        execution_output = self.truncate_execuion(preview_text if preview_text else "[]")
+
         if self.debug:
-            termcolor.cprint(execution_result, "yellow")
-        return {**state, "execution": execution_result}
+            termcolor.cprint(execution_output, "yellow")
+
+        return {
+            **state,
+            "execution": execution_output,
+            "execution_payload": payload,
+            "execution_error": None,
+            "execution_success": True,
+        }
 
     def check_query(self, state: State) -> State:
         """Check the SQL query for correctness."""
@@ -515,6 +579,86 @@ class LitSQLAgent(agl.LitAgent[Dict[str, Any]]):
         self.max_turns = max_turns
         self.table_info_truncate = table_info_truncate
         self.execution_truncate = execution_truncate
+        self.result_output_path = RESULT_OUTPUT_PATH
+        self.result_output_path.parent.mkdir(parents=True, exist_ok=True)
+        self._results_lock = threading.Lock()
+        self._results: List[Dict[str, Any]] = self._load_existing_results()
+
+    def _load_existing_results(self) -> List[Dict[str, Any]]:
+        try:
+            if not self.result_output_path.exists():
+                return []
+            with self.result_output_path.open("r", encoding="utf-8") as file:
+                data = json.load(file)
+            if isinstance(data, list):
+                return data
+        except json.JSONDecodeError as exc:
+            logger.warning("Failed to parse existing results at %s: %s", self.result_output_path, exc)
+        except OSError as exc:
+            logger.warning("Unable to read existing results at %s: %s", self.result_output_path, exc)
+        return []
+
+    def _write_results(self) -> None:
+        try:
+            with self.result_output_path.open("w", encoding="utf-8") as file:
+                json.dump(self._results, file, ensure_ascii=False, indent=4, default=_json_default)
+        except OSError as exc:
+            logger.error("Failed to write inference results to %s: %s", self.result_output_path, exc)
+
+    def _upsert_result(self, entry: Dict[str, Any]) -> None:
+        sql_id = entry.get("sql_id")
+        if sql_id is not None:
+            for index, existing in enumerate(self._results):
+                if existing.get("sql_id") == sql_id:
+                    self._results[index] = entry
+                    return
+        self._results.append(entry)
+
+    def _resolve_sql_id(self, task: Dict[str, Any]) -> str:
+        sql_id = task.get("sql_id") or task.get("id")
+        if isinstance(sql_id, str) and sql_id.strip():
+            return sql_id.strip()
+        question = task.get("question")
+        if isinstance(question, str) and question.strip():
+            return question.strip()[:32]
+        return "unknown_sql_id"
+
+    def _record_inference_result(
+        self, task: Dict[str, Any], agent_state: Dict[str, Any], reward: float | None
+    ) -> None:
+        sql_id = self._resolve_sql_id(task)
+        retry_steps = max(agent_state.get("num_turns", 1) - 1, 0)
+        execution_success = bool(agent_state.get("execution_success"))
+        success = execution_success
+        if reward is not None:
+            success = success and reward > 0
+        error_value: Optional[str] = agent_state.get("execution_error")
+        if not success and error_value is None and execution_success and reward is not None and reward <= 0:
+            error_value = "Query result did not match ground truth."
+        entry = {
+            "sql_id": sql_id,
+            "sql": agent_state.get("query"),
+            "result": agent_state.get("execution_payload"),
+            "success": success,
+            "error": None if success else error_value,
+            "retry_steps": retry_steps,
+        }
+        with self._results_lock:
+            self._upsert_result(entry)
+            self._write_results()
+
+    def _record_failed_inference(self, task: Dict[str, Any], error_message: str) -> None:
+        entry = {
+            "sql_id": self._resolve_sql_id(task),
+            "sql": None,
+            "result": None,
+            "success": False,
+            "error": error_message,
+            "retry_steps": 0,
+        }
+        with self._results_lock:
+            self._upsert_result(entry)
+            self._write_results()
 
     def rollout(
         self,
@@ -548,6 +692,7 @@ class LitSQLAgent(agl.LitAgent[Dict[str, Any]]):
         db_url = resolve_db_url(task)
         if not db_url:
             logger.error("[Rollout %s] Unable to resolve database URL for task %s", rollout_id, task.get("db_id"))
+            self._record_failed_inference(task, "Unable to resolve database URL.")
             return None
 
         schema_override = task.get("db_schema")
@@ -572,14 +717,23 @@ class LitSQLAgent(agl.LitAgent[Dict[str, Any]]):
             )
         except Exception as exc:
             logger.exception(f"[Rollout {rollout_id}] Error during agent invocation: {exc}")
+            self._record_failed_inference(task, str(exc))
             return None
 
-        logger.info(f"[Rollout {rollout_id}] Generated Query: {result['query']}")
+        logger.info(f"[Rollout {rollout_id}] Generated Query: {result.get('query')}")
 
         end_time_rollout = time.time()
 
-        reward = evaluate_query(result["query"], ground_truth, db_url, raise_on_error=False)
+        query_text = result.get("query")
+        reward: float | None
+        if query_text:
+            reward = evaluate_query(query_text, ground_truth, db_url, raise_on_error=False)
+        else:
+            reward = None
+            logger.warning("[Rollout %s] No query generated for evaluation.", rollout_id)
         logger.info("[Rollout %s] Reward: %s", rollout_id, reward)
+
+        self._record_inference_result(task, result, reward)
 
         end_time_eval = time.time()
         logger.info("[Rollout %s] Time taken for rollout: %.2f seconds", rollout_id, end_time_rollout - start_time)
@@ -621,10 +775,10 @@ def debug_sql_agent():
 
     agent = SQLAgent(
         db_url,
-        max_turns=3,
+        max_turns=5,
         table_info_truncate=4096,
         execution_truncate=4096,
-        debug=False,
+        debug=True,
         db_schema=debug_schema,
     ).graph()
 
