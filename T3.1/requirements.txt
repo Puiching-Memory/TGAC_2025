@@ -4,5 +4,9 @@ langchain-community
 langchain-text-splitters<1.0
 sqlparse
 nltk
+ninja
 
-agentlightning[apo]
+agentlightning[verl]
+
+flashinfer-python
+flashinfer-cubin

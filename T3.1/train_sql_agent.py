@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import argparse
 from copy import deepcopy
+from pathlib import Path
 from typing import Any, Dict, Optional
 
 import pandas as pd
@@ -29,31 +30,25 @@ RL_TRAINING_CONFIG: Dict[str, Any] = {
         "use_kl_in_reward": False,
     },
     "data": {
-        "train_files": "data/train_spider.parquet",
-        "val_files": "data/test_dev_500.parquet",
-        "train_batch_size": 32,
+        "train_files": "../T3/data/final_dataset.json",
+        "val_files": "../T3/data/final_dataset.json",
+    "train_batch_size": 4, # Must remain >= n_gpus_per_node and divisible by it
         "max_prompt_length": 4096,
         "max_response_length": 2048,
         "truncation": "error",
     },
     "actor_rollout_ref": {
         "rollout": {
-            "tensor_model_parallel_size": 1,
-            "n": 4,
+            "tensor_model_parallel_size": 4,
+            "n": 1,
             "log_prob_micro_batch_size_per_gpu": 4,
             "multi_turn": {"format": "hermes"},
             "name": "vllm",
-            "gpu_memory_utilization": 0.8,
-            "engine_kwargs": {
-                "vllm": {
-                    "enable_auto_tool_choice": True,
-                    "tool_call_parser": "hermes",
-                }
-            },
+            "gpu_memory_utilization": 0.05,
         },
         "actor": {
-            "ppo_mini_batch_size": 32,
-            "ppo_micro_batch_size_per_gpu": 4,
+            "ppo_mini_batch_size": 4, # Keep <= train_batch_size and >= n_gpus_per_node to avoid zero normalization
+            "ppo_micro_batch_size_per_gpu": 1, # Must evenly divide normalized mini batch (= ppo_mini_batch_size / n_gpus_per_node)
             "optim": {"lr": 1e-6},
             "use_kl_loss": False,
             "kl_loss_coef": 0.0,
@@ -70,34 +65,65 @@ RL_TRAINING_CONFIG: Dict[str, Any] = {
             "fsdp_config": {"param_offload": True},
         },
         "model": {
-            "path": "Qwen/Qwen2.5-Coder-1.5B-Instruct",
+            "path": "XGenerationLab/XiYanSQL-QwenCoder-3B-2504",
             "use_remove_padding": True,
             "enable_gradient_checkpointing": True,
         },
     },
     "trainer": {
-        "n_gpus_per_node": 1,
+        "n_gpus_per_node": 4,
         "val_before_train": True,
         "critic_warmup": 0,
-        "logger": ["console", "wandb"],
+        "logger": ["console"],
         "project_name": "AgentLightning",
-        "experiment_name": "spider",
+        "experiment_name": "text2sql",
         "nnodes": 1,
         "test_freq": 32,
         "total_epochs": 2,
     },
 }
 
+
+def _resolve_path(path: str) -> str:
+    candidate = Path(path)
+    if candidate.is_absolute():
+        return str(candidate)
+    resolved = (Path(__file__).resolve().parent / candidate).resolve()
+    if not resolved.exists():
+        raise FileNotFoundError(f"Resolved path does not exist: {resolved}")
+    return str(resolved)
+
+
 def train(config: Dict[str, Any], active_agent: Optional[str]) -> None:
     """Train the SQL agent with the given configuration."""
 
     agent = LitSQLAgent()
     algorithm = agl.VERL(config)
-    trainer = agl.Trainer(n_runners=10, algorithm=algorithm, adapter={"agent_match": active_agent})
+    trainer = agl.Trainer(n_runners=1, algorithm=algorithm, adapter={"agent_match": active_agent})
     print("Adapter agent match acknowledged:", trainer.adapter.agent_match)  # type: ignore
 
-    train_data = pd.read_parquet(config["data"]["train_files"]).to_dict(orient="records")  # type: ignore
-    val_data = pd.read_parquet(config["data"]["val_files"]).to_dict(orient="records")  # type: ignore
+    # Load data - support both parquet and JSON formats
+    train_files = _resolve_path(config["data"]["train_files"])
+    val_files = _resolve_path(config["data"]["val_files"])
+    
+    if train_files.endswith(".parquet"):
+        train_df = pd.read_parquet(train_files)
+        train_data = train_df.where(pd.notnull(train_df), None).to_dict(orient="records")  # type: ignore
+    elif train_files.endswith(".json"):
+        train_df = pd.read_json(train_files)
+        train_data = train_df.where(pd.notnull(train_df), None).to_dict(orient="records")  # type: ignore
+    else:
+        raise ValueError(f"Unsupported file format: {train_files}")
+    
+    if val_files.endswith(".parquet"):
+        val_df = pd.read_parquet(val_files)
+        val_data = val_df.where(pd.notnull(val_df), None).to_dict(orient="records")  # type: ignore
+    elif val_files.endswith(".json"):
+        val_df = pd.read_json(val_files)
+        val_data = val_df.where(pd.notnull(val_df), None).to_dict(orient="records")  # type: ignore
+    else:
+        raise ValueError(f"Unsupported file format: {val_files}")
+    
     trainer.fit(agent, train_dataset=train_data, val_dataset=val_data)  # type: ignore
 
 

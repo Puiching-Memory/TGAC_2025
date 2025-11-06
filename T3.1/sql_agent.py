@@ -1,7 +1,7 @@
 # Copyright (c) Microsoft. All rights reserved.
 
 """Sample code that demonstrates an SQL agent using LangGraph and LangChain,
-trainable with Agent-lightning.
+ trainable with Agent-lightning.
 
 Adapted from https://python.langchain.com/docs/tutorials/sql_qa/
 as well as https://langchain-ai.github.io/langgraph/tutorials/sql-agent/
@@ -9,6 +9,7 @@ as well as https://langchain-ai.github.io/langgraph/tutorials/sql-agent/
 
 from __future__ import annotations
 
+import csv
 import json
 import re
 import time
@@ -17,7 +18,7 @@ from datetime import date, datetime
 from decimal import Decimal
 from pathlib import Path
 import threading
-from typing import Any, Dict, List, Literal, Optional, cast
+from typing import Any, ClassVar, Dict, List, Literal, Optional, cast
 from urllib.parse import quote_plus
 
 import pandas as pd
@@ -53,9 +54,14 @@ DEFAULT_OPENAI_MODEL = "qwen3-coder-plus-2025-09-23"
 DEFAULT_OPENAI_API_BASE = "https://dashscope.aliyuncs.com/compatible-mode/v1"
 DEFAULT_OPENAI_API_KEY = "sk-21f31afa708c4c6f9bf6b73585788e41"
 
+CKPT_DIR = Path("T3/ckpt/V6_31.40_1105")
+CKPT_SCORE_PATH = CKPT_DIR / "score.csv"
+CKPT_RESULT_PATH = CKPT_DIR / "dataset_exe_result.json"
+
 REPO_ROOT = Path(__file__).resolve().parent.parent
 RESULT_OUTPUT_PATH = REPO_ROOT / "T3" / "upload" / "dataset_exe_result.json"
 MAX_LOGGED_ROWS = 200
+DEFAULT_EXECUTION_SUCCESS_REWARD = 0.1
 
 
 def _json_default(value: Any) -> Any:
@@ -70,6 +76,25 @@ def _json_default(value: Any) -> Any:
     if isinstance(value, bytes):
         return value.decode("utf-8", errors="ignore")
     return str(value)
+
+
+def _ensure_iterable_records(payload: Any) -> List[Dict[str, Any]]:
+    if isinstance(payload, list):
+        return [record for record in payload if isinstance(record, dict)]
+    return []
+
+
+def _stringify_records(records: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    stringified: List[Dict[str, Any]] = []
+    for record in records:
+        stringified.append({key: "" if value is None else str(value) for key, value in record.items()})
+    return stringified
+
+
+def _records_counter_from_payload(payload: Any) -> Counter[str]:
+    records = _ensure_iterable_records(payload)
+    normalized = _stringify_records(records)
+    return Counter(json.dumps(item, sort_keys=True, ensure_ascii=False) for item in normalized)
 
 
 def resolve_db_url(task: Dict[str, Any]) -> Optional[str]:
@@ -529,24 +554,46 @@ class SQLAgent:
         return builder.compile()  # type: ignore
 
 
-def evaluate_query(query: str, ground_truth: str, database: str, raise_on_error: bool = True) -> float:
+def evaluate_query(
+    query: str,
+    database: str,
+    *,
+    ground_truth_query: Optional[str] = None,
+    ground_truth_result: Optional[Any] = None,
+    predicted_result: Optional[Any] = None,
+    raise_on_error: bool = True,
+) -> float:
+    if ground_truth_result is not None:
+        if predicted_result is None:
+            return 0.0
+        predicted_counter = _records_counter_from_payload(predicted_result)
+        ground_truth_counter = _records_counter_from_payload(ground_truth_result)
+        return 1.0 if predicted_counter == ground_truth_counter else 0.0
+
+    if not ground_truth_query:
+        return 0.0
+
     engine = None
     try:
         engine = create_engine(database)
         with engine.connect() as connection:
             predicted_df = pd.read_sql_query(text(query), connection)
-            ground_truth_df = pd.read_sql_query(text(ground_truth), connection)
+            ground_truth_df = pd.read_sql_query(text(ground_truth_query), connection)
 
         if set(predicted_df.columns) != set(ground_truth_df.columns):
-            logger.debug("Column mismatch during evaluation: predicted=%s, ground_truth=%s", predicted_df.columns, ground_truth_df.columns)
+            logger.debug(
+                "Column mismatch during evaluation: predicted=%s, ground_truth=%s",
+                predicted_df.columns,
+                ground_truth_df.columns,
+            )
             return 0.0
 
-        def _records_counter(df: pd.DataFrame) -> Counter[str]:
-            records = df.to_dict(orient="records")
-            return Counter(json.dumps(record, sort_keys=True, default=str) for record in records)
-
-        predicted_counter = _records_counter(predicted_df)
-        ground_truth_counter = _records_counter(ground_truth_df)
+        predicted_counter = _records_counter_from_payload(
+            predicted_df.to_dict(orient="records")
+        )
+        ground_truth_counter = _records_counter_from_payload(
+            ground_truth_df.to_dict(orient="records")
+        )
 
         return 1.0 if predicted_counter == ground_truth_counter else 0.0
     except SQLAlchemyError as exc:
@@ -566,6 +613,9 @@ def evaluate_query(query: str, ground_truth: str, database: str, raise_on_error:
 
 class LitSQLAgent(agl.LitAgent[Dict[str, Any]]):
 
+    _ground_truth_cache: ClassVar[Optional[Dict[str, Dict[str, Any]]]] = None
+    _ground_truth_lock: ClassVar[threading.Lock] = threading.Lock()
+
     def __init__(
         self,
         trained_agents: Optional[str] = r"write",
@@ -573,16 +623,87 @@ class LitSQLAgent(agl.LitAgent[Dict[str, Any]]):
         max_turns: int = 3,
         table_info_truncate: int = 2048,
         execution_truncate: int = 2048,
+        execution_success_reward: float = DEFAULT_EXECUTION_SUCCESS_REWARD,
     ) -> None:
         super().__init__(trained_agents=trained_agents)
         self.val_temperature = val_temperature
         self.max_turns = max_turns
         self.table_info_truncate = table_info_truncate
         self.execution_truncate = execution_truncate
+        self.execution_success_reward = execution_success_reward
         self.result_output_path = RESULT_OUTPUT_PATH
         self.result_output_path.parent.mkdir(parents=True, exist_ok=True)
         self._results_lock = threading.Lock()
         self._results: List[Dict[str, Any]] = self._load_existing_results()
+        self._ground_truth_map = self._get_ground_truth_cache()
+
+    @classmethod
+    def _get_ground_truth_cache(cls) -> Dict[str, Dict[str, Any]]:
+        with cls._ground_truth_lock:
+            if cls._ground_truth_cache is None:
+                cls._ground_truth_cache = cls._build_ground_truth_cache()
+            return cls._ground_truth_cache
+
+    @classmethod
+    def _build_ground_truth_cache(cls) -> Dict[str, Dict[str, Any]]:
+        cache: Dict[str, Dict[str, Any]] = {}
+        if not CKPT_SCORE_PATH.exists() or not CKPT_RESULT_PATH.exists():
+            logger.warning(
+                "Ground truth resources not found at %s or %s.",
+                CKPT_SCORE_PATH,
+                CKPT_RESULT_PATH,
+            )
+            return cache
+
+        score_map: Dict[str, int] = {}
+        try:
+            with CKPT_SCORE_PATH.open("r", encoding="utf-8-sig", newline="") as file:
+                reader = csv.DictReader(file)
+                for row in reader:
+                    raw_id = (
+                        row.get("SQL ID")
+                        or row.get("sql_id")
+                        or row.get("SqlId")
+                        or row.get("\ufeffSQL ID")
+                    )
+                    score_str = row.get("得分") or row.get("score")
+                    if not raw_id or score_str is None:
+                        continue
+                    sql_id = raw_id.strip()
+                    try:
+                        score_map[sql_id] = int(score_str)
+                    except (TypeError, ValueError):
+                        logger.debug("Unable to parse score for %s from %s", sql_id, score_str)
+        except OSError as exc:
+            logger.warning("Failed to read score.csv at %s: %s", CKPT_SCORE_PATH, exc)
+            return cache
+
+        try:
+            with CKPT_RESULT_PATH.open("r", encoding="utf-8") as file:
+                payload = json.load(file)
+        except (OSError, json.JSONDecodeError) as exc:
+            logger.warning("Failed to read dataset_exe_result.json at %s: %s", CKPT_RESULT_PATH, exc)
+            return cache
+
+        if not isinstance(payload, list):
+            logger.warning("Unexpected ground truth payload format: expected list, got %s", type(payload))
+            return cache
+
+        for entry in payload:
+            if not isinstance(entry, dict):
+                continue
+            sql_id = entry.get("sql_id")
+            if not isinstance(sql_id, str):
+                continue
+            if score_map.get(sql_id.strip()) != 1:
+                continue
+            cache[sql_id.strip()] = {
+                "sql": entry.get("sql"),
+                "result": entry.get("result"),
+            }
+
+        logger.info("Loaded %d ground truth entries from checkpoint %s", len(cache), CKPT_DIR)
+        return cache
 
     def _load_existing_results(self) -> List[Dict[str, Any]]:
         try:
@@ -666,7 +787,11 @@ class LitSQLAgent(agl.LitAgent[Dict[str, Any]]):
         resources: agl.NamedResources,
         rollout: agl.Rollout,
     ) -> float | None:
-        question = task["question"]
+        question = task.get("question")
+        if not question:
+            logger.error("[Rollout %s] Task %s is missing the question field.", rollout.rollout_id, task)
+            self._record_failed_inference(task, "Missing question field in task payload.")
+            return None
         start_time = time.time()
         llm: agl.LLM = cast(agl.LLM, resources["main_llm"])
 
@@ -684,10 +809,33 @@ class LitSQLAgent(agl.LitAgent[Dict[str, Any]]):
         )
         endpoint_base = llm.get_base_url(rollout.rollout_id, rollout.attempt.attempt_id)  # type: ignore
 
-        ground_truth = task["query"]
         rollout_id = rollout.rollout_id
         logger.info(f"[Rollout {rollout_id}] Question: {question}")
-        logger.info(f"[Rollout {rollout_id}] Ground Truth: {ground_truth}")
+        sql_id = self._resolve_sql_id(task)
+
+        ground_truth_entry = self._ground_truth_map.get(sql_id)
+        ground_truth_query = None
+        ground_truth_result = None
+        if ground_truth_entry:
+            ground_truth_query = ground_truth_entry.get("sql")
+            ground_truth_result = ground_truth_entry.get("result")
+
+        if not ground_truth_query:
+            fallback = task.get("query") or task.get("sql")
+            if isinstance(fallback, str) and fallback.strip():
+                ground_truth_query = fallback.strip()
+
+        if ground_truth_result is None and isinstance(task.get("result"), list):
+            ground_truth_result = task.get("result")
+
+        if ground_truth_query:
+            logger.info(f"[Rollout {rollout_id}] Ground Truth Query Source: {sql_id}")
+        elif ground_truth_result is not None:
+            logger.info(f"[Rollout {rollout_id}] Using cached ground truth result for {sql_id}")
+        else:
+            logger.warning(
+                "[Rollout %s] No ground truth available for task %s", rollout_id, sql_id
+            )
 
         db_url = resolve_db_url(task)
         if not db_url:
@@ -725,13 +873,38 @@ class LitSQLAgent(agl.LitAgent[Dict[str, Any]]):
         end_time_rollout = time.time()
 
         query_text = result.get("query")
-        reward: float | None
-        if query_text:
-            reward = evaluate_query(query_text, ground_truth, db_url, raise_on_error=False)
+        execution_success = bool(result.get("execution_success"))
+        base_reward = self.execution_success_reward if execution_success else 0.0
+        reward: float | None = None
+        match_reward: Optional[float] = None
+
+        if query_text and (ground_truth_query or ground_truth_result is not None):
+            match_reward = evaluate_query(
+                query_text,
+                db_url,
+                ground_truth_query=ground_truth_query,
+                ground_truth_result=ground_truth_result,
+                predicted_result=result.get("execution_payload"),
+                raise_on_error=False,
+            )
+            reward = base_reward + match_reward
+            logger.info("[Rollout %s] Match Reward: %.2f", rollout_id, match_reward)
+        elif execution_success:
+            reward = base_reward
+            logger.info(
+                "[Rollout %s] Reward from execution success only: %.2f",
+                rollout_id,
+                reward,
+            )
         else:
-            reward = None
-            logger.warning("[Rollout %s] No query generated for evaluation.", rollout_id)
-        logger.info("[Rollout %s] Reward: %s", rollout_id, reward)
+            if not query_text:
+                logger.warning("[Rollout %s] No query generated for evaluation.", rollout_id)
+            logger.warning(
+                "[Rollout %s] Skipping reward computation due to missing ground truth and failed execution.",
+                rollout_id,
+            )
+
+        logger.info("[Rollout %s] Total Reward: %s", rollout_id, reward)
 
         self._record_inference_result(task, result, reward)
 

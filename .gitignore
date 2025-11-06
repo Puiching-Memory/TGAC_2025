@@ -10,3 +10,4 @@ model/
 dataset_exe_result.json
 *.zip
 T3/data/dataset_exe_result.json
+agentops.log
