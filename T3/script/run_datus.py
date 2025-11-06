@@ -64,6 +64,10 @@ WORKFLOW_TIMEOUT = 300
 # 缓存（全局状态）
 _ACCESS_TOKEN: str | None = None
 
+# 磁盘读取缓存与跳过列表
+_PROMPT_CONTENT_CACHE: Dict[Path, str] = {}
+_SKIPPED_PROMPT_IDS: List[str] = []
+
 
 # ============================================================================
 # 数据类定义
@@ -94,6 +98,7 @@ class ProcessingStats:
     failed: int
     success_rate: str
     failed_ids: List[str]
+    skipped: int = 0
 
 
 # ============================================================================
@@ -201,15 +206,42 @@ def load_resources() -> List[Path]:
 
     # 加载提示词文件
     prompt_files = load_prompt_files()
+
+    total_files = len(prompt_files)
+    valid_prompt_files: List[Path] = []
+    skipped_ids: List[str] = []
+
+    for prompt_file in prompt_files:
+        content = load_prompt_from_file(prompt_file)
+        if should_skip_prompt(content):
+            skipped_ids.append(prompt_file.stem)
+            continue
+        valid_prompt_files.append(prompt_file)
+
+    _SKIPPED_PROMPT_IDS.clear()
+    _SKIPPED_PROMPT_IDS.extend(skipped_ids)
+
     print(
         color_text(
-            f"✓ 已加载 {len(prompt_files)} 个提示词文件",
+            f"✓ 有效提示词: {len(valid_prompt_files)} / {total_files}",
             color=Fore.GREEN,
             style=Style.BRIGHT,
         )
     )
 
-    return prompt_files
+    if skipped_ids:
+        preview = ", ".join(skipped_ids[:10])
+        if len(skipped_ids) > 10:
+            preview += ", ..."
+        print(
+            color_text(
+                f"⚠ 已跳过 {len(skipped_ids)} 个 golden_sql=true 的样本: {preview}",
+                color=Fore.YELLOW,
+                style=Style.BRIGHT,
+            )
+        )
+
+    return valid_prompt_files
 
 
 # ============================================================================
@@ -218,7 +250,31 @@ def load_resources() -> List[Path]:
 
 def load_prompt_from_file(prompt_file: Path) -> str:
     """从文件加载提示词内容。"""
-    return prompt_file.read_text(encoding="utf-8")
+    if prompt_file in _PROMPT_CONTENT_CACHE:
+        return _PROMPT_CONTENT_CACHE[prompt_file]
+    content = prompt_file.read_text(encoding="utf-8")
+    _PROMPT_CONTENT_CACHE[prompt_file] = content
+    return content
+
+
+def _contains_golden_sql_flag(data: Any) -> bool:
+    """递归检测 JSON 结构中是否包含 golden_sql=true。"""
+    if isinstance(data, dict):
+        if data.get("golden_sql") is True:
+            return True
+        return any(_contains_golden_sql_flag(value) for value in data.values())
+    if isinstance(data, list):
+        return any(_contains_golden_sql_flag(item) for item in data)
+    return False
+
+
+def should_skip_prompt(content: str) -> bool:
+    """判断提示词内容是否应基于 golden_sql 标记而跳过。"""
+    try:
+        parsed = json.loads(content)
+    except json.JSONDecodeError:
+        return False
+    return _contains_golden_sql_flag(parsed)
 
 
 # ============================================================================
@@ -413,6 +469,7 @@ def batch_process(
         failed=failed_count,
         success_rate=success_rate,
         failed_ids=failed_ids,
+        skipped=len(_SKIPPED_PROMPT_IDS),
     )
 
     return results, stats
@@ -463,6 +520,13 @@ def export_results(results: List[TaskResult], stats: ProcessingStats) -> None:
             style=Style.BRIGHT,
         )
     )
+    if stats.skipped:
+        print(
+            color_text(
+                f"  - 跳过样本: {stats.skipped}",
+                color=Fore.YELLOW,
+            )
+        )
 
 
 # ============================================================================

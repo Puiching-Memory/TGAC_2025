@@ -1,11 +1,21 @@
+# 基本依赖
 pymysql==1.1.2
 toon_format==0.1.0
-# datus-agent==0.2.1
-agentlightning[verl]==0.2.1 # 和 datus-agent 同时安装时有 rich 依赖冲突
-langchain==1.0.3
-langchain-community==0.4.1
-langchain-openai==1.0.2
 
 # M-Schema 依赖
-sqlalchemy==2.0.44
-llama-index==0.12.42
+sqlalchemy
+llama-index
+
+# datus 依赖
+# datus-agent==0.2.1
+
+# langchain 依赖
+# langchain==1.0.3
+# langchain-community==0.4.1
+# langchain-openai==1.0.2
+
+# agentlightning 依赖
+# agentlightning[verl]==0.2.1 # 和 datus-agent 同时安装时有 rich 依赖冲突
+
+# vanna 依赖
+vanna[fastapi,mysql,openai] @ git+https://github.com/vanna-ai/vanna.git@v2

@@ -19,7 +19,7 @@ model = ChatOpenAI(
     
     model="qwen3-coder-plus-2025-09-23",
     base_url="https://dashscope.aliyuncs.com/compatible-mode/v1",
-    api_key="sk-21f31afa708c4c6f9bf6b73585788e41",
+    api_key="",
 
     temperature=0.1,
     n=1,
