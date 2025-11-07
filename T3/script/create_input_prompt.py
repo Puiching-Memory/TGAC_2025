@@ -1,7 +1,16 @@
-from tools.tools4sql import get_mschema
 import json
-from toon_format import encode
 from transformers import AutoTokenizer
+from toon_format import encode
+
+def get_mschema(table_name: str) -> str:
+    """Retrieve the M-Schema for a specific table."""
+    with open(f'./T3/data/mschema_database_main.json', 'r', encoding='utf-8') as f:
+        mschema_json = json.load(f)
+
+    o = mschema_json.get("tables", {}).get(table_name, {})
+    n = {"table_name": table_name}
+    n.update(o)
+    return n
 
 with open("T3/data/final_dataset.json", "r", encoding="utf-8") as f:
     json_data = json.load(f)
@@ -12,7 +21,8 @@ with open("T3/data/common_knowledge.md", "r", encoding="utf-8") as f:
 tokenizer = AutoTokenizer.from_pretrained("Qwen/Qwen-7B", trust_remote_code=True)
 
 for t in json_data:
-    
+    if t.get("golden_sql"):continue
+
     prompt = f"""你是一名StarRocks mysql 4.0.0专家，现在需要阅读并理解下面的[数据库schema]描述，以及可能用到的[参考信息]，并运用StarRocks mysql 4.0.0知识生成sql语句回答[用户问题]。
 [用户问题]: {t["question"]}  
 [数据库schema]: {encode([get_mschema(i) for i in t["table_list"]])}

@@ -51,7 +51,7 @@
         default: null
         autoincrement: false
         comment: ""
-        examples[5]: 休闲模式,创意创作间,"nan",乐园,传统模式
+        examples[5]: 休闲模式,创意创作间,nan,乐园,传统模式
       submode:
         type: BIGINT
         primary_key: false
@@ -83,7 +83,7 @@
         default: null
         autoincrement: false
         comment: ""
-        examples[4]: MapB,"nan",MapC,MapA
+        examples[4]: MapB,nan,MapC,MapA
       seasonid:
         type: BIGINT
         primary_key: false

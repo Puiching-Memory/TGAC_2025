@@ -118,7 +118,7 @@
         default: null
         autoincrement: false
         comment: ""
-        examples[3]: "nan","1.3108225854312548e+18","1.3443389336615928e+18"
+        examples[3]: nan,"1.3108225854312548e+18","1.3443389336615928e+18"
       isleader:
         type: BIGINT
         primary_key: false
@@ -254,7 +254,7 @@
         default: null
         autoincrement: false
         comment: ""
-        examples[1]: "nan"
+        examples[1]: nan
       match_client_type:
         type: BIGINT
         primary_key: false
@@ -318,7 +318,7 @@
         default: null
         autoincrement: false
         comment: ""
-        examples[1]: "nan"
+        examples[1]: nan
       matchscene:
         type: BIGINT
         primary_key: false
@@ -478,7 +478,7 @@
         default: null
         autoincrement: false
         comment: ""
-        examples[1]: "nan"
+        examples[1]: nan
       accompanytype:
         type: BIGINT
         primary_key: false
@@ -518,7 +518,7 @@
         default: null
         autoincrement: false
         comment: ""
-        examples[4]: wx92.cg.qq.com,sq94.cg.qq.com,sq92.cg.qq.com,"nan"
+        examples[4]: wx92.cg.qq.com,sq94.cg.qq.com,sq92.cg.qq.com,nan
       strategyextendinfo:
         type: VARCHAR(65533)
         primary_key: false
@@ -526,7 +526,7 @@
         default: null
         autoincrement: false
         comment: ""
-        examples[1]: "nan"
+        examples[1]: nan
       playerabtest:
         type: VARCHAR(65533)
         primary_key: false
@@ -542,7 +542,7 @@
         default: null
         autoincrement: false
         comment: ""
-        examples[1]: "nan"
+        examples[1]: nan
       matchtype:
         type: BIGINT
         primary_key: false
@@ -614,7 +614,7 @@
         default: null
         autoincrement: false
         comment: ""
-        examples[2]: "1.3443389336615928e+18","nan"
+        examples[2]: "1.3443389336615928e+18",nan
       aitype:
         type: BIGINT
         primary_key: false
@@ -726,7 +726,7 @@
         default: null
         autoincrement: false
         comment: ""
-        examples[1]: "nan"
+        examples[1]: nan
       isabtwarmgame:
         type: BIGINT
         primary_key: false
@@ -750,7 +750,7 @@
         default: null
         autoincrement: false
         comment: ""
-        examples[1]: "nan"
+        examples[1]: nan
       secondarydecratingtype:
         type: BIGINT
         primary_key: false
@@ -798,7 +798,7 @@
         default: null
         autoincrement: false
         comment: ""
-        examples[1]: "nan"
+        examples[1]: nan
       escapewarmscore:
         type: VARCHAR(65533)
         primary_key: false
@@ -806,7 +806,7 @@
         default: null
         autoincrement: false
         comment: ""
-        examples[1]: "nan"
+        examples[1]: nan
       pvethemeid:
         type: BIGINT
         primary_key: false

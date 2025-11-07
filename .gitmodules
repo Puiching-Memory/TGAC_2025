@@ -1,3 +1,6 @@
 [submodule "T3/lib/M-Schema"]
 	path = T3/lib/M-Schema
 	url = https://github.com/XGenerationLab/M-Schema.git
+[submodule "T3/lib/toon-python"]
+	path = T3/lib/toon-python
+	url = https://github.com/toon-format/toon-python.git

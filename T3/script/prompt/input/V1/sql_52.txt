@@ -86,7 +86,7 @@
         default: null
         autoincrement: false
         comment: ""
-        examples[5]: B,"nan",temp,I,test
+        examples[5]: B,nan,temp,I,test
       vtemp2:
         type: VARCHAR(65533)
         primary_key: false

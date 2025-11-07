@@ -84,7 +84,7 @@
         default: null
         autoincrement: false
         comment: ""
-        examples[5]: B,"nan",temp,I,test
+        examples[5]: B,nan,temp,I,test
       vtemp2:
         type: VARCHAR(65533)
         primary_key: false
@@ -220,7 +220,7 @@
         default: null
         autoincrement: false
         comment: ""
-        examples[2]: "nan","0.0"
+        examples[2]: nan,"0.0"
       vtemp2:
         type: VARCHAR(65533)
         primary_key: false
@@ -228,7 +228,7 @@
         default: null
         autoincrement: false
         comment: ""
-        examples[5]: "20241211.0","nan","20241030.0","20241023.0","20241009.0"
+        examples[5]: "20241211.0",nan,"20241030.0","20241023.0","20241009.0"
     examples[0]:
     comment: ""
 [参考信息]: 7天平均参与率：当天参与人数/当天活跃人,七日内平均

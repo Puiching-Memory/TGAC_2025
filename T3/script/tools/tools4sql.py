@@ -23,9 +23,6 @@ db_name = "database_main"
 
 db_engine = create_engine(f"mysql+pymysql://{db_user_name}:{db_pwd}@{db_host}:{port}/{db_name}")
 
-with open(f'./T3/data/mschema_{db_name}.json', 'r', encoding='utf-8') as f:
-    mschema_json = json.load(f)
-
 #=== Agent 使用的工具 ===#
 
 @tool
@@ -47,14 +44,3 @@ def run_sql_query(query: str) -> str:
             )
     except SQLAlchemyError as exc:
         return json.dumps({"status": "error", "message": str(exc)}, ensure_ascii=False)
-    
-
-
-#=== Prompt 使用的工具 ===#
-
-def get_mschema(table_name: str) -> str:
-    """Retrieve the M-Schema for a specific table."""
-    o = mschema_json.get("tables", {}).get(table_name, {})
-    n = {"table_name": table_name}
-    n.update(o)
-    return n
