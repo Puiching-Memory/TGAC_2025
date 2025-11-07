@@ -2,8 +2,9 @@ import os
 
 from vanna.integrations.openai import OpenAILlmService
 from vanna.integrations.mysql import MySQLRunner
-from vanna.tools.agent_memory import SaveQuestionToolArgsTool, SearchSavedCorrectToolUsesTool
+from vanna.tools.agent_memory import SaveQuestionToolArgsTool, SearchSavedCorrectToolUsesTool, SaveTextMemoryTool
 from vanna.integrations.local.agent_memory import DemoAgentMemory
+from vanna.integrations.chromadb import ChromaAgentMemory
 from vanna.core.user import UserResolver, User, RequestContext
 
 from vanna import Agent,AgentConfig
@@ -30,14 +31,6 @@ db_tool = TGACRunSqlTool(
     )
 )
 
-# Set up agent memory for learning from questions and SQL
-agent_memory = DemoAgentMemory(max_items=10000)
-save_memory_tool = SaveQuestionToolArgsTool(agent_memory=agent_memory)
-search_memory_tool = SearchSavedCorrectToolUsesTool(agent_memory)
-
-# TODO
-# agent_memory.save_tool_usage()
-
 # Create a simple user resolver
 class SimpleUserResolver(UserResolver):
     async def resolve_user(self, request_context: RequestContext) -> User:
@@ -48,11 +41,20 @@ class SimpleUserResolver(UserResolver):
 # Initialize the user resolver
 user_resolver = SimpleUserResolver()
 
+# Set up agent memory for learning from questions and SQL
+# agent_memory = DemoAgentMemory(max_items=10000)
+agent_memory = ChromaAgentMemory(
+    collection_name="vanna_tool_memory",
+    persist_directory="./chroma_db",
+    embedding_model="Qwen/Qwen3-Embedding-0.6B"
+)
+
 # Register tools
 tools = ToolRegistry()
 tools.register_local_tool(db_tool, access_groups=['admin', 'user'])
-tools.register_local_tool(save_memory_tool, access_groups=['admin'])
-tools.register_local_tool(search_memory_tool, access_groups=['admin', 'user'])
+tools.register_local_tool(SaveQuestionToolArgsTool(), access_groups=['admin'])
+tools.register_local_tool(SearchSavedCorrectToolUsesTool(), access_groups=['admin', 'user'])
+tools.register_local_tool(SaveTextMemoryTool(), access_groups=['admin', 'user'])
 
 # Create your agent
 agent = Agent(
@@ -62,12 +64,12 @@ agent = Agent(
     lifecycle_hooks=[
         SaveTGACResultHook(
             "T3/upload/dataset_exe_result.json",
-            seed_dataset_path="T3/data/final_dataset.json",
         )
     ],
     config=AgentConfig(
         max_tool_iterations=25,
-    )
+    ),
+    agent_memory=agent_memory
 )
 
 server = VannaFastAPIServer(agent)

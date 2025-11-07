@@ -15,20 +15,47 @@ def get_mschema(table_name: str) -> str:
 with open("T3/data/final_dataset.json", "r", encoding="utf-8") as f:
     json_data = json.load(f)
 
-with open("T3/data/common_knowledge.md", "r", encoding="utf-8") as f:
-    common_knowledge = f.read()
-
 tokenizer = AutoTokenizer.from_pretrained("Qwen/Qwen-7B", trust_remote_code=True)
 
 for t in json_data:
     if t.get("golden_sql"):continue
 
-    prompt = f"""你是一名StarRocks mysql 4.0.0专家，现在需要阅读并理解下面的[数据库schema]描述，以及可能用到的[参考信息]，并运用StarRocks mysql 4.0.0知识生成sql语句回答[用户问题]。
+    prompt = f"""你是一名StarRocks mysql 4.0.0专家，现在需要阅读并理解下面的[数据库schema]描述，以及可能用到的[%知识]和[%规范]，并运用StarRocks mysql 4.0.0知识生成sql语句回答[用户问题]。
 [用户问题]: {t["question"]}  
+
+[table_names]: {t["table_list"]} 
+
 [数据库schema]: {encode([get_mschema(i) for i in t["table_list"]])}
-[参考信息]: {t["knowledge"]}
-[通用知识]: {common_knowledge}
-[涉及的表名列表]: {t["table_list"]}  
+
+[提示]: {t["knowledge"]}
+
+[游戏知识]: 
+- 砺刃使者、勇者盟约、峡谷行动 为游戏名，均为FPS游戏。乐园是砺刃使者下的UGC玩法模式，包含很多子玩法。
+- 手游大盘、平台大盘代表所有游戏集合。
+- 如果提到某游戏大盘，是指该游戏本身所有活跃用户，而不是全游戏。比如"砺刃大盘活跃"是指砺刃使者游戏的活跃。
+- 一个玩家id可能对应多个角色id。
+- 游戏玩家行为明细日志，通常会被叫成“流水”，通常表名的格式为：`dwd_gamecode_行为标识别_hi`。游戏玩家付费充值金额也会被叫成“流水”
+- 如果"用户问题"只提到'活跃'，没有明确说具体玩法模式的活跃，默认为游戏活跃，而不是游戏内具体某个玩法模式的活跃。
+
+[常用指标知识]: 
+- DAU：日活跃用户数
+- 留存：以次留为例，表示当天活跃第二天依然活跃的用户定义为次留，其他留存以此类推
+- 新进：注册
+
+[数据仓库分层规范]:
+- DWD层用于存储玩家行为明细数据，每一条行为事件包含一条记录
+- DWS层用于存储玩家粒度或者进一步聚合粒度的数据
+- DIM代表维度配表
+
+[数据仓库命名规范]:
+以`dws_jordass_mode_roundrecord_di` 为例：
+  - `dws` 前缀代表分层
+  - `jordass` 代表gamecode
+  - `mode_roundrecord` 代表表业务含义
+  - `di` 后缀中，`d` 代表按天分区，`i` 代表每天存储增量数据。如果后缀是`df`，代表每天存储游戏开服至今的全量数据，使用时取时间周期最后一天即可
+
+[数据仓库字段规范]:
+- cbitmap：100位0和1组成的字符串，左侧第一位代表当天。1表示有对应行为，比如活跃或付费，0 表示未发生对应行为，比如未活跃或未付费。常常使用该字段统计流失、回流、留存等指标
 """
 
     print(f"{prompt}")

@@ -3,8 +3,10 @@ from __future__ import annotations
 import asyncio
 import json
 from collections import OrderedDict
+from datetime import date, datetime
+from decimal import Decimal
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 from vanna.core.lifecycle import LifecycleHook
 from vanna.core.storage import Conversation
@@ -31,14 +33,12 @@ class TGACRunSqlTool(RunSqlTool):
 class SaveTGACResultHook(LifecycleHook):
     """Lifecycle hook that writes executed SQL results to the TGAC dataset file."""
 
-    def __init__(self, output_path: str, seed_dataset_path: Optional[str] = None) -> None:
+    def __init__(self, output_path: str) -> None:
         self._output_path = Path(output_path).resolve()
         self._output_path.parent.mkdir(parents=True, exist_ok=True)
-        self._seed_dataset_path = Path(seed_dataset_path).resolve() if seed_dataset_path else None
         self._conversation_stack: List[Tuple[str, str]] = []
         self._pending_results: Dict[str, ToolResult] = {}
         self._lock = asyncio.Lock()
-        self._seed_golden_entries()
 
     async def before_tool(self, tool: Tool[Any], context: ToolContext) -> None:
         # Track the conversation for the upcoming tool result.
@@ -114,18 +114,6 @@ class SaveTGACResultHook(LifecycleHook):
                 data.append(entry)
             self._write_entries(data)
 
-    def _merge_seed_entries(self, entries: Iterable[Dict[str, Any]]) -> None:
-        data = self._load_entries()
-        changed = False
-        existing_ids = {item.get("sql_id") for item in data}
-        for entry in entries:
-            if entry["sql_id"] in existing_ids:
-                continue
-            data.append(entry)
-            changed = True
-        if changed:
-            self._write_entries(data)
-
     def _load_entries(self) -> List[Dict[str, Any]]:
         if not self._output_path.exists():
             return []
@@ -148,6 +136,12 @@ class SaveTGACResultHook(LifecycleHook):
             return {k: self._clean_for_json(v) for k, v in value.items()}
         if isinstance(value, list):
             return [self._clean_for_json(v) for v in value]
+        if isinstance(value, (datetime, date)):
+            return value.isoformat()
+        if isinstance(value, Decimal):
+            return float(value)
+        if isinstance(value, bytes):
+            return value.decode("utf-8", errors="replace")
         if hasattr(value, "item") and callable(getattr(value, "item")):
             try:
                 return value.item()
@@ -155,41 +149,3 @@ class SaveTGACResultHook(LifecycleHook):
                 return str(value)
         return value
 
-    def _seed_golden_entries(self) -> None:
-        if not self._seed_dataset_path or not self._seed_dataset_path.exists():
-            return
-        try:
-            with self._seed_dataset_path.open("r", encoding="utf-8") as fh:
-                payload = json.load(fh)
-        except json.JSONDecodeError:
-            return
-
-        if not isinstance(payload, list):
-            return
-
-        seed_entries: List[Dict[str, Any]] = []
-        for item in payload:
-            if not isinstance(item, dict):
-                continue
-            if not item.get("golden_sql"):
-                continue
-            sql_id = item.get("sql_id")
-            sql_text = item.get("sql")
-            if not sql_id or not isinstance(sql_id, str):
-                continue
-            if not sql_text or not isinstance(sql_text, str):
-                continue
-            entry = OrderedDict(
-                (
-                    ("sql_id", sql_id),
-                    ("sql", sql_text),
-                    ("result", None),
-                    ("success", True),
-                    ("error", None),
-                    ("retry_steps", 0),
-                )
-            )
-            seed_entries.append(entry)
-
-        if seed_entries:
-            self._merge_seed_entries(seed_entries)

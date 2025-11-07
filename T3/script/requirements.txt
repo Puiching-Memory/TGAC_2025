@@ -3,6 +3,8 @@ pymysql==1.1.2
 # toon_format==0.1.0
 T3/lib/toon-python
 transformers
+modelscope
+huggingface_hub
 
 # M-Schema 依赖
 sqlalchemy
@@ -22,3 +24,4 @@ llama-index
 # vanna 依赖
 vanna[fastapi,mysql,openai] @ git+https://github.com/vanna-ai/vanna.git@v2
 # uvicorn[standard] # 可选
+chromadb # 可选，用于持久化存储 Agent Memory
