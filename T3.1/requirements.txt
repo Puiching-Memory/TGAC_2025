@@ -10,3 +10,5 @@ agentlightning[verl]
 
 flashinfer-python
 flashinfer-cubin
+
+pymysql

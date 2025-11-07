@@ -32,22 +32,22 @@ RL_TRAINING_CONFIG: Dict[str, Any] = {
     "data": {
         "train_files": "../T3/data/final_dataset.json",
         "val_files": "../T3/data/final_dataset.json",
-    "train_batch_size": 4, # Must remain >= n_gpus_per_node and divisible by it
+    "train_batch_size": 2, # Must remain >= n_gpus_per_node and divisible by it
         "max_prompt_length": 4096,
         "max_response_length": 2048,
         "truncation": "error",
     },
     "actor_rollout_ref": {
         "rollout": {
-            "tensor_model_parallel_size": 4,
+            "tensor_model_parallel_size": 2,
             "n": 1,
             "log_prob_micro_batch_size_per_gpu": 4,
             "multi_turn": {"format": "hermes"},
             "name": "vllm",
-            "gpu_memory_utilization": 0.05,
+            "gpu_memory_utilization": 0.1,
         },
         "actor": {
-            "ppo_mini_batch_size": 4, # Keep <= train_batch_size and >= n_gpus_per_node to avoid zero normalization
+            "ppo_mini_batch_size": 2, # Keep <= train_batch_size and >= n_gpus_per_node to avoid zero normalization
             "ppo_micro_batch_size_per_gpu": 1, # Must evenly divide normalized mini batch (= ppo_mini_batch_size / n_gpus_per_node)
             "optim": {"lr": 1e-6},
             "use_kl_loss": False,
@@ -71,7 +71,7 @@ RL_TRAINING_CONFIG: Dict[str, Any] = {
         },
     },
     "trainer": {
-        "n_gpus_per_node": 4,
+        "n_gpus_per_node": 2,
         "val_before_train": True,
         "critic_warmup": 0,
         "logger": ["console"],
