@@ -18,7 +18,7 @@ from vanna.core.enhancer import DefaultLlmContextEnhancer
 # Set up OpenAI GPT as your LLM
 llm = OpenAILlmService(
     base_url="https://dashscope.aliyuncs.com/compatible-mode/v1",
-    model="qwen3-coder-flash", # qwen-plus # "qwen3-coder-plus-2025-09-23",
+    model="qwen3-coder-plus-2025-09-23", # qwen3-coder-flash # qwen-plus # qwen3-coder-plus-2025-09-23,
     api_key=os.getenv("OPENAI_API_KEY")  # Or use os.getenv("OPENAI_API_KEY")
 
     # base_url="http://127.0.0.1:1234/v1",
@@ -79,7 +79,7 @@ agent = Agent(
         )
     ],
     config=AgentConfig(
-        max_tool_iterations=25,
+        max_tool_iterations=30,
     ),
     agent_memory=agent_memory,
     llm_context_enhancer=DefaultLlmContextEnhancer(agent_memory)

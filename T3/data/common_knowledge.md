@@ -27,5 +27,7 @@
 ### 字段规范
 - cbitmap：100位0和1组成的字符串，左侧第一位代表当天。1表示有对应行为，比如活跃或付费，0 表示未发生对应行为，比如未活跃或未付费。常常使用该字段统计流失、回流、留存等指标
 
-### 特殊说明
+## 其他知识
 - "721号码包"是《砺刃使者》游戏中ID为 1347357572114488064 的特定游戏模式标识符，存储在`dws_jordass_matchlog_stat_di`表的`imode`字段中。
+- gplayerid是玩家ID（player ID）的一种表示方式，在数据库中用于唯一标识玩家。在不同表中，gplayerid可能指代不同的玩家标识符，但在dim_vplayerid_vies_df表中明确标注为vplayerid，即gplayerid。在dim_mgamejp_account_allinfo_nf表中提到，对于新游存储的是gplayerid，而对于老游戏存储的是传统的playerid。
+- BP枪皮通过商城购买系统获取，使用点券等货币支付，数据记录在dwd_jordass_marketpurchase_hi和dwd_jordass_currencylog_hi表中，与战役通行证系统关联。

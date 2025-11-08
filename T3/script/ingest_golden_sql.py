@@ -84,7 +84,7 @@ def _build_ckpt_metadata(
         "source": "ckpt_history",
         "ckpt_version": ckpt_run,
         "score": score,
-        "label": "positive" if score else "negative",
+        "label": "positive",
         "result_preview": result_preview,
     }
     if base_entry:
@@ -237,8 +237,10 @@ async def _ingest_ckpt_history(
             sql_text = record.get("sql") if isinstance(record, dict) else None
             sql_text_str = sql_text if isinstance(sql_text, str) else ""
             score_value = score_map.get(sql_id, 0)
-            success = bool(score_value)
-            label = "positive" if success else "negative"
+            if score_value <= 0:
+                continue
+
+            label = "positive"
 
             candidates.append(
                 {
@@ -250,7 +252,6 @@ async def _ingest_ckpt_history(
                         "ckpt_version": run_dir.name,
                         "label": label,
                     },
-                    "success": success,
                     "metadata": _build_ckpt_metadata(
                         base_entry=dataset_entry,
                         ckpt_run=run_dir.name,
@@ -279,7 +280,7 @@ async def _ingest_ckpt_history(
             tool_name="run_sql",
             args=candidate["args"],
             context=context,
-            success=candidate["success"],
+            success=True,
             metadata=candidate["metadata"],
         )
         inserted += 1

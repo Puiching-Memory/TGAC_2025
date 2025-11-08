@@ -21,8 +21,7 @@ tokenizer = AutoTokenizer.from_pretrained("Qwen/Qwen-7B", trust_remote_code=True
 for t in json_data:
     if t.get("golden_sql"):continue
 
-    prompt = f"""你是一名StarRocks mysql 4.0.0专家, 请你生成sql语句回答[用户问题]。
-[用户问题]: {t["question"]}  
+    prompt = f"""[用户问题]: {t["question"]}  
 [涉及表名]: {t["table_list"]} 
 [提示]: {t["knowledge"] or "无"}
 """
