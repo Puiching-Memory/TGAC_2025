@@ -11,13 +11,23 @@ from vanna import Agent,AgentConfig
 from vanna.core.registry import ToolRegistry
 from vanna.servers.fastapi import VannaFastAPIServer
 from vanna_hook import SaveTGACResultHook, TGACRunSqlTool
+from vannna_tools import SearchSchemaTool, SearchDomainKnowledgeTool
 
+from vanna.core.enhancer import DefaultLlmContextEnhancer
 
 # Set up OpenAI GPT as your LLM
 llm = OpenAILlmService(
     base_url="https://dashscope.aliyuncs.com/compatible-mode/v1",
-    model="qwen3-coder-plus-2025-09-23",
+    model="qwen3-coder-flash", # qwen-plus # "qwen3-coder-plus-2025-09-23",
     api_key=os.getenv("OPENAI_API_KEY")  # Or use os.getenv("OPENAI_API_KEY")
+
+    # base_url="http://127.0.0.1:1234/v1",
+    # model="qwen/qwen3-4b-2507",
+    # api_key=None
+
+    # base_url="http://127.0.0.1:8891/v1",
+    # model="XGenerationLab/XiYanSQL-QwenCoder-7B-2504",
+    # api_key=None
 )
 
 # Set up database connection
@@ -45,13 +55,15 @@ user_resolver = SimpleUserResolver()
 # agent_memory = DemoAgentMemory(max_items=10000)
 agent_memory = ChromaAgentMemory(
     collection_name="vanna_tool_memory",
-    persist_directory="./chroma_db",
+    persist_directory="T3/chroma_db",
     embedding_model="Qwen/Qwen3-Embedding-0.6B"
 )
 
 # Register tools
 tools = ToolRegistry()
 tools.register_local_tool(db_tool, access_groups=['admin', 'user'])
+tools.register_local_tool(SearchSchemaTool(), access_groups=['admin', 'user'])
+tools.register_local_tool(SearchDomainKnowledgeTool(), access_groups=['admin', 'user'])
 tools.register_local_tool(SaveQuestionToolArgsTool(), access_groups=['admin'])
 tools.register_local_tool(SearchSavedCorrectToolUsesTool(), access_groups=['admin', 'user'])
 tools.register_local_tool(SaveTextMemoryTool(), access_groups=['admin', 'user'])
@@ -69,7 +81,8 @@ agent = Agent(
     config=AgentConfig(
         max_tool_iterations=25,
     ),
-    agent_memory=agent_memory
+    agent_memory=agent_memory,
+    llm_context_enhancer=DefaultLlmContextEnhancer(agent_memory)
 )
 
 server = VannaFastAPIServer(agent)

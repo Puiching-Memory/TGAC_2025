@@ -7,6 +7,7 @@ output/
 ckpt/
 model/
 chroma_db/
+temp/
 
 dataset_exe_result.json
 *.zip

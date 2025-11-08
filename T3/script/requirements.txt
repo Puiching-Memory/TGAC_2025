@@ -25,3 +25,4 @@ llama-index
 vanna[fastapi,mysql,openai] @ git+https://github.com/vanna-ai/vanna.git@v2
 # uvicorn[standard] # 可选
 chromadb # 可选，用于持久化存储 Agent Memory
+sentence_transformers # 可选，用于生成 Embedding
