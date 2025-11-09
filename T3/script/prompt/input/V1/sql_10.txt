@@ -1,8 +1,0 @@
-[用户问题]: 统计2023.7.12-2025.6.15，赛季bp道具皮肤的使用情况。
-输出：道具id、赛季名称、当前赛季使用人数、当前赛季购买人数  
-[涉及表名]: ['dwd_argothek_playerloadout_expressions_hi', 'dwd_argothek_playerloadout_hi', 'dwd_argothek_playerloadout_sprayslots_hi', 'dwd_argothek_commercialization_gearid_df', 'dim_argothek_seasondate_df'] 
-[提示]: bp枪皮购买逻辑:
-and purchaseSource = "BATTLEPASS_PROGRESS" -- 筛选来源为BATTLEPASS_PROGRESS
-and itemtype = "d5f120f8-ff8c-4aac-92ea-f2b5acbe9475" -- 筛选itemtype为指定值
-枪皮使用逻辑：
-expressionassetid is not null and expressiontypeid = "d5f120f8-ff8c-4aac-92ea-f2b5acbe9475"

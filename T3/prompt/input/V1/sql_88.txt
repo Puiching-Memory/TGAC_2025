@@ -1,0 +1,92 @@
+你是一个StarRocks数据库专家，擅长根据业务需求编写准确、高效的SQL查询语句。
+
+# SQL生成任务
+## 用户问题
+统计赛季末期（20230529-20230627）的垂类玩法轻中重度及垂类独占用户，从3.22-6.27的，每周玩法分布和段位变化情况
+输出：周期（7天为一个周期），活跃度(轻度、中度、重度、独占)，玩法（主题群屿、群屿、传统其他、休闲模式、...），段位，人数
+## 涉及表名
+`dwd_jordass_playerlogin_hi`, `dws_jordass_mode_roundrecord_di`
+## 提示信息
+垂类玩法轻中重度用户划分条件：
+ 轻度：1-4天，中度：5-15天，重度：16-30天
+垂类独占用户筛选逻辑:
+至少玩过submode IN (1265972235155284992,1278160113246405632)模式一次且没玩过其他任何模式的用户（注意submode可为空的情况）
+垂类玩法： modename = '乐园' and submode IN (1265972235155284992,1278160113246405632
+段位截取方式：seasonmaxsegment截取第一位 1-7分别代表青铜、白银、黄金、铂金、星钻、王冠、王牌
+限定modename in ('传统模式','休闲模式','组队竞技','领地','乐园','广阔天地','创意创作间'), case when modename='传统模式' and mapname='群屿' and submode in (2557,2558,2559) then '主题群屿'
+when modename='传统模式' and mapname='群屿' then '群屿'
+when modename='传统模式' then '传统其他'
+else modename end
+## 失败案例参考
+以下案例曾出现过错误，请避免类似问题：
+### 失败案例 1
+- **SQL ID**: `sql_88`
+- **来源**: CKPT `V7.1_22.09_1108`
+
+**错误SQL:**
+
+```sql
+WITH user_intensity AS (
+  SELECT 
+    vplayerid,
+    CASE 
+      WHEN COUNT(DISTINCT SUBSTR(tdbank_imp_date, 1, 8)) BETWEEN 1 AND 4 THEN '轻度'
+      WHEN COUNT(DISTINCT SUBSTR(tdbank_imp_date, 1, 8)) BETWEEN 5 AND 15 THEN '中度'
+      WHEN COUNT(DISTINCT SUBSTR(tdbank_imp_date, 1, 8)) >= 16 THEN '重度'
+      ELSE '未知'
+    END as active_level
+  FROM dwd_jordass_playerlogin_hi
+  WHERE tdbank_imp_date BETWEEN '20230322' AND '20230627'
+  GROUP BY vplayerid
+),
+dedicated_users AS (
+  SELECT vplayerid
+  FROM dws_jordass_mode_roundrecord_di
+  WHERE dtstatdate BETWEEN '20230322' AND '20230627'
+    AND submode IN ('1265972235155284992', '1278160113246405632')
+  GROUP BY vplayerid
+  HAVING COUNT(*) = SUM(CASE WHEN modename = '乐园' THEN 1 ELSE 0 END)
+),
+user_categories AS (
+  SELECT 
+    ui.vplayerid,
+    ui.active_level,
+    CASE WHEN du.vplayerid IS NOT NULL THEN '独占' ELSE '非独占' END as user_category
+  FROM user_intensity ui
+  LEFT JOIN dedicated_users du ON ui.vplayerid = du.vplayerid
+),
+weekly_data AS (
+  SELECT 
+    YEARWEEK(STR_TO_DATE(dtstatdate, '%Y%m%d'), 1) as yearweek,
+    FLOOR((DAYOFYEAR(STR_TO_DATE(dtstatdate, '%Y%m%d')) - DAYOFYEAR('2023-03-22')) / 7) + 1 as period,
+    uc.active_level,
+    uc.user_category,
+    CASE 
+      WHEN m.modename = '传统模式' AND m.mapname = '群屿' AND m.submode IN (2557,2558,2559) THEN '主题群屿'
+      WHEN m.modename = '传统模式' AND m.mapname = '群屿' THEN '群屿'
+      WHEN m.modename = '传统模式' THEN '传统其他'
+      ELSE m.modename 
+    END as gameplay_category,
+    CASE 
+      WHEN p.seasonmaxsegment IS NOT NULL THEN CAST(LEFT(CAST(p.seasonmaxsegment AS VARCHAR), 1) AS INT)
+      ELSE NULL 
+    END as segment_level
+  FROM dws_jordass_mode_roundrecord_di m
+  INNER JOIN user_categories uc ON m.vplayerid = uc.vplayerid
+  LEFT JOIN dwd_jordass_playerlogin_hi p ON m.vplayerid = p.vplayerid AND p.tdbank_imp_date LIKE CONCAT(dtstatdate, '%')
+  WHERE m.dtstatdate BETWEEN '20230322' AND '20230627'
+)
+SELECT 
+  period as 周期,
+  active_level as 活跃度,
+  user_category as 用户类型,
+  gameplay_category as 玩法,
+  segment_level as 段位,
+  COUNT(*) as 人数
+FROM weekly_data
+WHERE segment_level IS NOT NULL
+GROUP BY period, active_level, user_category, gameplay_category, segment_level
+ORDER BY period, active_level, user_category, gameplay_category, segment_level;
+```
+
+> **错误原因**: 结果与预期不匹配

@@ -1,7 +1,0 @@
-[用户问题]: 统计：近30天用户在渠道登录的天数为5到8天，取最多天数的用户，并将用户ID转为qq
-输出：QQ
-统计日期：20250330-20250428  
-[涉及表名]: ['dws_argothek_oss_login_di', 'dim_argothek_gplayerid2qqwxid_df'] 
-[提示]: 渠道筛选条件：iloginway = 3
-用户ID筛选swxid_type = "qq" -- 筛选swxid_type为"qq"
-dim_argothek_gplayerid2qqwxid_df限定20250428

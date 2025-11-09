@@ -1,0 +1,85 @@
+你是一个StarRocks数据库专家，擅长根据业务需求编写准确、高效的SQL查询语句。
+
+# SQL生成任务
+## 用户问题
+统计 玩家参与
+	新年竞赛杯（20240202-20240204，20240209-20240211）
+	明星竞赛杯（20231208-20231210，20231215-20231217）
+	众竞赛道（20231006-20231008，20230929-20231001，20230922-20230924）
+	珍禽竞赛杯（20230721-20230723，20230728-20230730）
+	都会竞速（20230519-20230611，20230616-20230625）
+	寒域竞赛杯（20230505-20230507，20230512-20230514）
+	飞跃竞赛杯（20230121-20230127）
+	联队竞赛杯（20221125-20221127，20221202-20221204）
+	职赛杯（20220819-20220821，20220826-20220828）
+	夏日假期竞赛杯（20220722-20220724，20220729-20220731）
+	众投竞赛（20220506-20220508，20220513-20220515，20220520-20220522）且matchmode为（1503,1603）的期数
+	输出：每个玩家参与的不相同的期数
+## 涉及表名
+`dwd_jordass_player_matchrecord_hi`
+## 失败案例参考
+以下案例曾出现过错误，请避免类似问题：
+### 失败案例 1
+- **SQL ID**: `sql_115`
+- **来源**: CKPT `V7.1_22.09_1108`
+
+**错误SQL:**
+
+```sql
+SELECT
+    vplayerid,
+    COUNT(DISTINCT SUBSTR(tdbank_imp_date, 1, 8)) AS distinct_periods
+FROM dwd_jordass_player_matchrecord_hi
+WHERE (
+    -- 新年竞赛杯
+    (SUBSTR(tdbank_imp_date, 1, 8) BETWEEN '20240202' AND '20240204') OR
+    (SUBSTR(tdbank_imp_date, 1, 8) BETWEEN '20240209' AND '20240211') OR
+
+    -- 明星竞赛杯
+    (SUBSTR(tdbank_imp_date, 1, 8) BETWEEN '20231208' AND '20231210') OR
+    (SUBSTR(tdbank_imp_date, 1, 8) BETWEEN '20231215' AND '20231217') OR
+
+    -- 众竞赛道
+    (SUBSTR(tdbank_imp_date, 1, 8) BETWEEN '20231006' AND '20231008') OR
+    (SUBSTR(tdbank_imp_date, 1, 8) BETWEEN '20230929' AND '20231001') OR
+    (SUBSTR(tdbank_imp_date, 1, 8) BETWEEN '20230922' AND '20230924') OR
+
+    -- 珍禽竞赛杯
+    (SUBSTR(tdbank_imp_date, 1, 8) BETWEEN '20230721' AND '20230723') OR
+    (SUBSTR(tdbank_imp_date, 1, 8) BETWEEN '20230728' AND '20230730') OR
+
+    -- 都会竞速
+    (SUBSTR(tdbank_imp_date, 1, 8) BETWEEN '20230519' AND '20230611') OR
+    (SUBSTR(tdbank_imp_date, 1, 8) BETWEEN '20230616' AND '20230625') OR
+
+    -- 寒域竞赛杯
+    (SUBSTR(tdbank_imp_date, 1, 8) BETWEEN '20230505' AND '20230507') OR
+    (SUBSTR(tdbank_imp_date, 1, 8) BETWEEN '20230512' AND '20230514') OR
+
+    -- 飞跃竞赛杯
+    (SUBSTR(tdbank_imp_date, 1, 8) BETWEEN '20230121' AND '20230127') OR
+
+    -- 联队竞赛杯
+    (SUBSTR(tdbank_imp_date, 1, 8) BETWEEN '20221125' AND '20221127') OR
+    (SUBSTR(tdbank_imp_date, 1, 8) BETWEEN '20221202' AND '20221204') OR
+
+    -- 职赛杯
+    (SUBSTR(tdbank_imp_date, 1, 8) BETWEEN '20220819' AND '20220821') OR
+    (SUBSTR(tdbank_imp_date, 1, 8) BETWEEN '20220826' AND '20220828') OR
+
+    -- 夏日假期竞赛杯
+    (SUBSTR(tdbank_imp_date, 1, 8) BETWEEN '20220722' AND '20220724') OR
+    (SUBSTR(tdbank_imp_date, 1, 8) BETWEEN '20220729' AND '20220731') OR
+
+    -- 众投竞赛 + matchmode 限制
+    (
+        (SUBSTR(tdbank_imp_date, 1, 8) BETWEEN '20220506' AND '20220508') OR
+        (SUBSTR(tdbank_imp_date, 1, 8) BETWEEN '20220513' AND '20220515') OR
+        (SUBSTR(tdbank_imp_date, 1, 8) BETWEEN '20220520' AND '20220522')
+    ) AND matchmode IN (1503, 1603)
+)
+GROUP BY vplayerid
+ORDER BY distinct_periods DESC;
+```
+
+> **错误原因**: 结果与预期不匹配

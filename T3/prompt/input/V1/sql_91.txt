@@ -1,0 +1,113 @@
+你是一个StarRocks数据库专家，擅长根据业务需求编写准确、高效的SQL查询语句。
+
+# SQL生成任务
+## 用户问题
+统计2023.7.12-7.18,2023.7.19-7.25的全平台活跃用户的回流情况(7留存，14留存，30留存，60留存，90留存，180留存)
+输出：统计日期（20230712，20230713...20230725），类型（新进，7，14，30，60，90，180），人数
+## 涉及表名
+`dws_jordass_login_df`
+## 失败案例参考
+以下案例曾出现过错误，请避免类似问题：
+### 失败案例 1
+- **SQL ID**: `sql_91`
+- **来源**: CKPT `V7.1_22.09_1108`
+
+**错误SQL:**
+
+```sql
+WITH date_range AS (
+    SELECT '20230712' AS stat_date
+    UNION SELECT '20230713'
+    UNION SELECT '20230714'
+    UNION SELECT '20230715'
+    UNION SELECT '20230716'
+    UNION SELECT '20230717'
+    UNION SELECT '20230718'
+    UNION SELECT '20230719'
+    UNION SELECT '20230720'
+    UNION SELECT '20230721'
+    UNION SELECT '20230722'
+    UNION SELECT '20230723'
+    UNION SELECT '20230724'
+    UNION SELECT '20230725'
+),
+user_stats AS (
+    SELECT 
+        dtstatdate,
+        vplayerid,
+        cbitmap,
+        dregdate,
+        -- Check if user was active on the stat date (bit 1)
+        SUBSTR(cbitmap, 1, 1) AS is_active_today,
+        -- Extract future activity bits for retention analysis
+        SUBSTR(cbitmap, 8, 1) AS is_active_7days,  -- 7-day retention
+        SUBSTR(cbitmap, 15, 1) AS is_active_14days, -- 14-day retention
+        SUBSTR(cbitmap, 31, 1) AS is_active_30days, -- 30-day retention
+        SUBSTR(cbitmap, 61, 1) AS is_active_60days, -- 60-day retention
+        SUBSTR(cbitmap, 91, 1) AS is_active_90days  -- 90-day retention
+        -- Note: 180-day exceeds bitmap length (100 chars), so not calculable
+    FROM dws_jordass_login_df
+    WHERE dtstatdate IN ('20230712', '20230713', '20230714', '20230715', '20230716', '20230717', '20230718', '20230719', '20230720', '20230721', '20230722', '20230723', '20230724', '20230725')
+)
+SELECT 
+    dtstatdate AS 统计日期,
+    'new' AS 类型,
+    COUNT(*) AS 人数
+FROM user_stats
+WHERE is_active_today = '1' AND dregdate = dtstatdate
+GROUP BY dtstatdate
+
+UNION ALL
+
+SELECT 
+    dtstatdate AS 统计日期,
+    '7' AS 类型,
+    COUNT(*) AS 人数
+FROM user_stats
+WHERE is_active_today = '1' AND is_active_7days = '1'
+GROUP BY dtstatdate
+
+UNION ALL
+
+SELECT 
+    dtstatdate AS 统计日期,
+    '14' AS 类型,
+    COUNT(*) AS 人数
+FROM user_stats
+WHERE is_active_today = '1' AND is_active_14days = '1'
+GROUP BY dtstatdate
+
+UNION ALL
+
+SELECT 
+    dtstatdate AS 统计日期,
+    '30' AS 类型,
+    COUNT(*) AS 人数
+FROM user_stats
+WHERE is_active_today = '1' AND is_active_30days = '1'
+GROUP BY dtstatdate
+
+UNION ALL
+
+SELECT 
+    dtstatdate AS 统计日期,
+    '60' AS 类型,
+    COUNT(*) AS 人数
+FROM user_stats
+WHERE is_active_today = '1' AND is_active_60days = '1'
+GROUP BY dtstatdate
+
+UNION ALL
+
+SELECT 
+    dtstatdate AS 统计日期,
+    '90' AS 类型,
+    COUNT(*) AS 人数
+FROM user_stats
+WHERE is_active_today = '1' AND is_active_90days = '1'
+GROUP BY dtstatdate
+
+ORDER BY 统计日期, 类型
+```
+
+> **错误原因**: 结果与预期不匹配

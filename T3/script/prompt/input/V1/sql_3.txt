@@ -1,9 +1,0 @@
-[用户问题]: 统计2025年1月勇者盟约端游活跃玩家交叉峡谷端游及手游活跃玩家
-输出：玩家gplayerid  
-[涉及表名]: ['dws_argothek_oss_login_di', 'dim_argothek_gplayerid2qqwxid_df', 'dws_mgamejp_login_user_activity_di'] 
-[提示]: 峡谷筛选逻辑:
-sgamecode = "initiatived" -- 筛选峡谷游戏
-and saccounttype = "-100" -- 账号体系，取-100表示汇总
-and suseridtype in ("qq", "wxid") -- 账号类型，取qq或wxid
-and splattype in ("-100", "PC") -- 峡谷手游玩家及PC端玩家
-and splat = "-100" -- 写死为-100

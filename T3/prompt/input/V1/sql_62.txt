@@ -1,0 +1,34 @@
+你是一个StarRocks数据库专家，擅长根据业务需求编写准确、高效的SQL查询语句。
+
+# SQL生成任务
+## 用户问题
+统计20250226联盟前180日（包含当天）基础数据 说明：按照uid计算
+输出：统计日期（YYYYMMDD），角色DAU，联盟参与角色数，联盟完成特训任务角色数，联盟商店兑换次数
+## 涉及表名
+`dwd_jordass_allianceshopbuy_hi`, `dwd_jordass_player_allianceactive_hi`, `dwd_jordass_alliancebootcamprecord_hi`, `dwd_jordass_playerlogout_hi`, `dwd_jordass_playerlogin_hi`
+## 失败案例参考
+以下案例曾出现过错误，请避免类似问题：
+### 失败案例 1
+- **SQL ID**: `sql_62`
+- **来源**: CKPT `V7.1_22.09_1108`
+
+**错误SQL:**
+
+```sql
+SELECT '20250226' as stat_date, 
+       COUNT(DISTINCT l.uid) as role_dau,
+       COUNT(DISTINCT a.uid) as alliance_participants,
+       COUNT(DISTINCT b.memberuid) as completed_bootcamp_roles,
+       COUNT(s.uid) as shop_exchange_count
+FROM dwd_jordass_playerlogin_hi l
+LEFT JOIN dwd_jordass_player_allianceactive_hi a 
+  ON l.uid = a.uid AND l.tdbank_imp_date = a.tdbank_imp_date
+LEFT JOIN dwd_jordass_alliancebootcamprecord_hi b 
+  ON a.uid = b.memberuid AND a.tdbank_imp_date = b.tdbank_imp_date AND b.taskid IS NOT NULL
+LEFT JOIN dwd_jordass_allianceshopbuy_hi s 
+  ON l.uid = s.uid AND l.tdbank_imp_date = s.tdbank_imp_date
+WHERE SUBSTR(l.tdbank_imp_date, 1, 8) BETWEEN '20240830' AND '20250226'
+  AND SUBSTR(l.dteventtime, 1, 10) BETWEEN '2024-08-30' AND '2025-02-26'
+```
+
+> **错误原因**: 结果与预期不匹配

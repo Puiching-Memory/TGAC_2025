@@ -1,0 +1,24 @@
+你是一个StarRocks数据库专家，擅长根据业务需求编写准确、高效的SQL查询语句。
+
+# SQL生成任务
+## 用户问题
+2024.10.01-10.08期间参与了参与率在后20%子玩法的用户在周期内每天参与所有乐园子玩法的数量分布
+数量分布：1，2，3，4，5，6-10，11-20，21以上
+输出：统计日期(20241001、...、20241008)、数量分布、人数
+
+参与率：每个子玩法的总对局数从高到低排名
+## 涉及表名
+`dws_jordass_matchlog_stat_di`
+## 失败案例参考
+以下案例曾出现过错误，请避免类似问题：
+### 失败案例 1
+- **SQL ID**: `sql_52`
+- **来源**: CKPT `V7.1_22.09_1108`
+
+**错误SQL:**
+
+```sql
+SELECT dtstatdate, imode, SUM(icnt) as total_matches FROM dws_jordass_matchlog_stat_di WHERE dtstatdate BETWEEN '20241001' AND '20241008' GROUP BY dtstatdate, imode
+```
+
+> **错误原因**: 结果与预期不匹配

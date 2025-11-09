@@ -1,0 +1,45 @@
+你是一个StarRocks数据库专家，擅长根据业务需求编写准确、高效的SQL查询语句。
+
+# SQL生成任务
+## 用户问题
+统计：2024.10.22-2024.11.19、2024.11.22-2024.12.19、2024.10.22-10.27、2024.10.28-11.03、2024.11.04-11.10、2024.11.11-11.17、2024.11.18-11.19、2024.11.22-11.24、2024.11.25-12.01、2024.12.02-12.08、2024.12.09-12.15、2024.12.16-12.19几个时间段的最近上新的曝光用户数（UV）、曝光次数（PV）
+输出：统计日期（例:20241023）、UV、PV
+
+## 涉及表名
+`dws_jordass_buttonpress_pre_di`
+## 提示信息
+buttontype="410012"表示曝光，一条记录代表一次
+## 失败案例参考
+以下案例曾出现过错误，请避免类似问题：
+### 失败案例 1
+- **SQL ID**: `sql_64`
+- **来源**: CKPT `V7.1_22.09_1108`
+
+**错误SQL:**
+
+```sql
+SELECT 
+    SUBSTR(dteventtime, 1, 10) AS stat_date,
+    COUNT(*) AS PV,
+    COUNT(DISTINCT uid) AS UV
+FROM dws_jordass_buttonpress_pre_di
+WHERE buttontype = '410012'
+  AND (
+    (dteventtime >= '2024-10-22' AND dteventtime < '2024-11-20') OR
+    (dteventtime >= '2024-11-22' AND dteventtime < '2024-12-20') OR
+    (dteventtime >= '2024-10-22' AND dteventtime < '2024-10-28') OR
+    (dteventtime >= '2024-10-28' AND dteventtime < '2024-11-04') OR
+    (dteventtime >= '2024-11-04' AND dteventtime < '2024-11-11') OR
+    (dteventtime >= '2024-11-11' AND dteventtime < '2024-11-18') OR
+    (dteventtime >= '2024-11-18' AND dteventtime < '2024-11-20') OR
+    (dteventtime >= '2024-11-22' AND dteventtime < '2024-11-25') OR
+    (dteventtime >= '2024-11-25' AND dteventtime < '2024-12-02') OR
+    (dteventtime >= '2024-12-02' AND dteventtime < '2024-12-09') OR
+    (dteventtime >= '2024-12-09' AND dteventtime < '2024-12-16') OR
+    (dteventtime >= '2024-12-16' AND dteventtime < '2024-12-20')
+  )
+GROUP BY stat_date
+ORDER BY stat_date
+```
+
+> **错误原因**: 结果与预期不匹配

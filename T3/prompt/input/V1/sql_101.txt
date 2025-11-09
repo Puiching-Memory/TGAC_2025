@@ -1,0 +1,79 @@
+你是一个StarRocks数据库专家，擅长根据业务需求编写准确、高效的SQL查询语句。
+
+# SQL生成任务
+## 用户问题
+统计日(2024.9.2,2024.9.3,2025.9.8,2025.9.9) 全平台活跃用户的本赛季最高段位等信息
+输出：统计日，本赛季最高段位，活跃用户数，统计日参与主题群屿玩法用户数，参与率
+## 涉及表名
+`dws_jordass_mode_roundrecord_di`, `dws_jordass_login_di`, `dwd_jordass_playerlogin_hi`
+## 提示信息
+主题群屿玩法：modename='传统模式' and submodename like 'CG%'
+段位分布：case when substr(seasonmaxsegment, 1, 1) = '1' then '青铜'
+                          when substr(seasonmaxsegment, 1, 1) = '2' then '白银'
+                          when substr(seasonmaxsegment, 1, 1) = '3' then '黄金'
+                          when substr(seasonmaxsegment, 1, 1) = '4' then '铂金'
+                          when substr(seasonmaxsegment, 1, 1) = '5' then '星钻'
+                          when substr(seasonmaxsegment, 1, 1) = '6' then '王冠'
+                          when substr(seasonmaxsegment, 1, 1) >= '7' then '王牌'
+                          else '无段位'
+	            end
+## 失败案例参考
+以下案例曾出现过错误，请避免类似问题：
+### 失败案例 1
+- **SQL ID**: `sql_101`
+- **来源**: CKPT `V7.1_22.09_1108`
+
+**错误SQL:**
+
+```sql
+WITH active_users AS (
+    SELECT
+        SUBSTR(tdbank_imp_date, 1, 8) AS stat_date,
+        CASE
+            WHEN SUBSTR(seasonmaxsegment, 1, 1) = '1' THEN '青铜'
+            WHEN SUBSTR(seasonmaxsegment, 1, 1) = '2' THEN '白银'
+            WHEN SUBSTR(seasonmaxsegment, 1, 1) = '3' THEN '黄金'
+            WHEN SUBSTR(seasonmaxsegment, 1, 1) = '4' THEN '铂金'
+            WHEN SUBSTR(seasonmaxsegment, 1, 1) = '5' THEN '星钻'
+            WHEN SUBSTR(seasonmaxsegment, 1, 1) = '6' THEN '王冠'
+            WHEN SUBSTR(seasonmaxsegment, 1, 1) >= '7' THEN '王牌'
+            ELSE '无段位'
+        END AS season_rank,
+        COUNT(DISTINCT vplayerid) AS active_users
+    FROM dwd_jordass_playerlogin_hi
+    WHERE SUBSTR(tdbank_imp_date, 1, 8) IN ('20240902', '20240903', '20250908', '20250909')
+    GROUP BY SUBSTR(tdbank_imp_date, 1, 8), season_rank
+),
+theme_island_users AS (
+    SELECT
+        t.dtstatdate AS stat_date,
+        CASE
+            WHEN SUBSTR(p.seasonmaxsegment, 1, 1) = '1' THEN '青铜'
+            WHEN SUBSTR(p.seasonmaxsegment, 1, 1) = '2' THEN '白银'
+            WHEN SUBSTR(p.seasonmaxsegment, 1, 1) = '3' THEN '黄金'
+            WHEN SUBSTR(p.seasonmaxsegment, 1, 1) = '4' THEN '铂金'
+            WHEN SUBSTR(p.seasonmaxsegment, 1, 1) = '5' THEN '星钻'
+            WHEN SUBSTR(p.seasonmaxsegment, 1, 1) = '6' THEN '王冠'
+            WHEN SUBSTR(p.seasonmaxsegment, 1, 1) >= '7' THEN '王牌'
+            ELSE '无段位'
+        END AS season_rank,
+        COUNT(DISTINCT p.vplayerid) AS theme_island_participants
+    FROM dws_jordass_mode_roundrecord_di t
+    JOIN dwd_jordass_playerlogin_hi p ON t.vplayerid = p.vplayerid AND SUBSTR(t.dtstatdate, 1, 8) = SUBSTR(p.tdbank_imp_date, 1, 8)
+    WHERE t.dtstatdate IN ('20240902', '20240903', '20250908', '20250909')
+      AND t.modename = '传统模式'
+      AND t.submodename LIKE 'CG%'
+    GROUP BY t.dtstatdate, season_rank
+)
+SELECT
+    a.stat_date AS 统计日,
+    a.season_rank AS 本赛季最高段位,
+    a.active_users AS 活跃用户数,
+    COALESCE(t.theme_island_participants, 0) AS 统计日参与主题群屿玩法用户数,
+    ROUND(COALESCE(t.theme_island_participants, 0) * 100.0 / a.active_users, 2) AS 参与率
+FROM active_users a
+LEFT JOIN theme_island_users t ON a.stat_date = t.stat_date AND a.season_rank = t.season_rank
+ORDER BY a.stat_date, a.season_rank
+```
+
+> **错误原因**: 结果与预期不匹配

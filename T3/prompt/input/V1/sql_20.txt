@@ -1,0 +1,60 @@
+你是一个StarRocks数据库专家，擅长根据业务需求编写准确、高效的SQL查询语句。
+
+# SQL生成任务
+## 用户问题
+统计20240101-20240430，网吧特权用户的指标数据。
+输出：
+月份（按月：202401、202402、202403、202404）
+人均对局时长（小时）
+网吧时间占当月游戏时间比例
+有对局的天数
+排位模式时长（小时）
+排位模式组队率
+月付费率
+月ARPA
+月ARPPA
+高校特权激活率
+
+
+## 涉及表名
+`dws_argothek_oss_login_di`, `dwd_argothek_playerlogout_hi`, `dws_argothek_oss_portaltransaction_di`, `dwd_argothek_playermatchstats_hi`
+## 提示信息
+排位模式：queueId="competitive"
+网吧特权：inetbarlevel = 2
+高校特权：icampuslevel > 0
+网吧在线时长先筛选网吧渠道
+## 失败案例参考
+以下案例曾出现过错误，请避免类似问题：
+### 失败案例 1
+- **SQL ID**: `sql_20`
+- **来源**: CKPT `V7.1_22.09_1108`
+
+**错误SQL:**
+
+```sql
+SELECT
+    LEFT(CAST(login.statis_date AS VARCHAR), 6) AS month,
+    AVG(match.gamelengthmillis / 3600000.0) AS avg_match_duration_hours,
+    SUM(CASE WHEN logout.iloginway = 3 THEN logout.ionlinetime ELSE 0 END) * 1.0 / SUM(logout.ionlinetime) AS netbar_time_ratio,
+    COUNT(DISTINCT login.statis_date) AS days_with_match,
+    SUM(CASE WHEN match.queueid = 'competitive' THEN match.gamelengthmillis / 3600000.0 ELSE 0 END) AS competitive_duration_hours,
+    COUNT(DISTINCT CASE WHEN match.queueid = 'competitive' AND match.partyid IS NOT NULL THEN match.matchid END) * 1.0 / 
+        NULLIF(COUNT(DISTINCT CASE WHEN match.queueid = 'competitive' THEN match.matchid END), 0) AS competitive_team_rate,
+    COUNT(DISTINCT CASE WHEN trans.ftranrealamt > 0 THEN login.iuserid END) * 1.0 / COUNT(DISTINCT login.iuserid) AS monthly_pay_rate,
+    SUM(trans.ftranrealamt) / COUNT(DISTINCT login.iuserid) AS arpa,
+    SUM(trans.ftranrealamt) / NULLIF(COUNT(DISTINCT CASE WHEN trans.ftranrealamt > 0 THEN login.iuserid END), 0) AS arppa,
+    COUNT(DISTINCT CASE WHEN logout.icampuslevel > '0' THEN login.iuserid END) * 1.0 / COUNT(DISTINCT login.iuserid) AS campus_activation_rate
+FROM dws_argothek_oss_login_di login
+JOIN dwd_argothek_playerlogout_hi logout ON login.iuserid = logout.iuserid
+    AND CAST(login.statis_date AS VARCHAR) = SUBSTR(logout.tdbank_imp_date, 1, 8)
+LEFT JOIN dwd_argothek_playermatchstats_hi match ON login.iuserid = match.vroleid
+    AND CAST(login.statis_date AS VARCHAR) = SUBSTR(match.tdbank_imp_date, 1, 8)
+LEFT JOIN dws_argothek_oss_portaltransaction_di trans ON login.iuserid = trans.iuserid
+    AND trans.statis_date = CAST(login.statis_date AS VARCHAR)
+WHERE login.statis_date BETWEEN 20240101 AND 20240430
+    AND logout.inetbarlevel = '2'
+GROUP BY LEFT(CAST(login.statis_date AS VARCHAR), 6)
+ORDER BY month;
+```
+
+> **错误原因**: 结果与预期不匹配

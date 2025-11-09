@@ -1,0 +1,204 @@
+你是一个StarRocks数据库专家，擅长根据业务需求编写准确、高效的SQL查询语句。
+
+# SQL生成任务
+## 用户问题
+统计：首日红装活动（20250119）返场抽奖的用户属性
+输出：初日华服回归抽奖&沙漠统治者有抽奖人数
+初日华服回归抽奖&境界双花有抽奖人数		
+初日华服回归抽奖&玄龙凌霄有抽奖人数		
+初日华服回归抽奖&沙漠统治者有抽奖&但没有其主套人数		
+初日华服回归抽奖&境界双花有抽奖&但没有其主套人数		
+初日华服回归抽奖&玄龙凌霄有抽奖&但没有其主套人数		
+初日华服回归抽奖&【沙漠统治者和境界双花有主套】人数		
+初日华服回归抽奖&【沙漠统治者和玄龙凌霄有主套】人数				
+初日华服回归抽奖&【境界双花和玄龙凌霄有主套】人数				
+初日华服回归抽奖但【沙漠统治者&境界双花&玄龙凌霄】没有抽奖人数
+## 涉及表名
+`dwd_jordass_gearlog_hi`, `dwd_jordass_lotteryrecord_hi`
+## 提示信息
+抽奖活动时间：
+沙漠统治者：20240426-20240606 
+镜域双华：20240607-20240725 
+玄龙凌霄：20240726-20240822
+抽奖活动筛选条件：
+初日华服回归抽奖 activitytype = 815
+沙漠统治者有抽奖 activitytype = 690
+境界双花有抽奖 activitytype = 748
+玄龙凌霄有抽奖 activitytype = 750
+主套提取逻辑：
+提取道具沙漠统治者-有主套的用户 igoodsid = 430179 and addorreduce = 0
+提取道具镜域双华-有主套的用户 igoodsid = 430265  and addorreduce = 0
+提取道具玄龙凌霄-有主套用户 igoodsid = 430225  and addorreduce = 0
+## 成功案例参考
+以下案例执行成功，可作为参考：
+### 成功案例 1
+- **SQL ID**: `sql_78`
+- **得分**: 1
+- **来源**: CKPT `V7.1_22.09_1108`
+
+**SQL:**
+
+```sql
+SELECT
+    -- 初日华服回归抽奖 & 沙漠统治者有抽奖人数
+    COUNT(DISTINCT CASE WHEN l815.vplayerid IS NOT NULL AND l690.vplayerid IS NOT NULL THEN l815.vplayerid END) AS 初日华服回归抽奖_沙漠统治者有抽奖人数,
+
+    -- 初日华服回归抽奖 & 境界双花有抽奖人数
+    COUNT(DISTINCT CASE WHEN l815.vplayerid IS NOT NULL AND l748.vplayerid IS NOT NULL THEN l815.vplayerid END) AS 初日华服回归抽奖_境界双花有抽奖人数,
+
+    -- 初日华服回归抽奖 & 玄龙凌霄有抽奖人数
+    COUNT(DISTINCT CASE WHEN l815.vplayerid IS NOT NULL AND l750.vplayerid IS NOT NULL THEN l815.vplayerid END) AS 初日华服回归抽奖_玄龙凌霄有抽奖人数,
+
+    -- 初日华服回归抽奖 & 沙漠统治者有抽奖 & 但没有其主套人数
+    COUNT(DISTINCT CASE 
+        WHEN l815.vplayerid IS NOT NULL 
+         AND l690.vplayerid IS NOT NULL 
+         AND gear_430179.vplayerid IS NULL 
+        THEN l815.vplayerid 
+    END) AS 初日华服回归抽奖_沙漠统治者有抽奖但无主套人数,
+
+    -- 初日华服回归抽奖 & 境界双花有抽奖 & 但没有其主套人数
+    COUNT(DISTINCT CASE 
+        WHEN l815.vplayerid IS NOT NULL 
+         AND l748.vplayerid IS NOT NULL 
+         AND gear_430265.vplayerid IS NULL 
+        THEN l815.vplayerid 
+    END) AS 初日华服回归抽奖_境界双花有抽奖但无主套人数,
+
+    -- 初日华服回归抽奖 & 玄龙凌霄有抽奖 & 但没有其主套人数
+    COUNT(DISTINCT CASE 
+        WHEN l815.vplayerid IS NOT NULL 
+         AND l750.vplayerid IS NOT NULL 
+         AND gear_430225.vplayerid IS NULL 
+        THEN l815.vplayerid 
+    END) AS 初日华服回归抽奖_玄龙凌霄有抽奖但无主套人数,
+
+    -- 初日华服回归抽奖 & 【沙漠统治者和境界双花有主套】人数
+    COUNT(DISTINCT CASE 
+        WHEN l815.vplayerid IS NOT NULL 
+         AND gear_430179.vplayerid IS NOT NULL 
+         AND gear_430265.vplayerid IS NOT NULL 
+        THEN l815.vplayerid 
+    END) AS 初日华服回归抽奖_沙漠统治者_境界双花有主套人数,
+
+    -- 初日华服回归抽奖 & 【沙漠统治者和玄龙凌霄有主套】人数
+    COUNT(DISTINCT CASE 
+        WHEN l815.vplayerid IS NOT NULL 
+         AND gear_430179.vplayerid IS NOT NULL 
+         AND gear_430225.vplayerid IS NOT NULL 
+        THEN l815.vplayerid 
+    END) AS 初日华服回归抽奖_沙漠统治者_玄龙凌霄有主套人数,
+
+    -- 初日华服回归抽奖 & 【境界双花和玄龙凌霄有主套】人数
+    COUNT(DISTINCT CASE 
+        WHEN l815.vplayerid IS NOT NULL 
+         AND gear_430265.vplayerid IS NOT NULL 
+         AND gear_430225.vplayerid IS NOT NULL 
+        THEN l815.vplayerid 
+    END) AS 初日华服回归抽奖_境界双花_玄龙凌霄有主套人数,
+
+    -- 初日华服回归抽奖但【沙漠统治者&境界双花&玄龙凌霄】没有抽奖人数
+    COUNT(DISTINCT CASE 
+        WHEN l815.vplayerid IS NOT NULL 
+         AND l690.vplayerid IS NULL 
+         AND l748.vplayerid IS NULL 
+         AND l750.vplayerid IS NULL 
+        THEN l815.vplayerid 
+    END) AS 初日华服回归抽奖_三套均未抽奖人数
+
+FROM 
+    (SELECT DISTINCT vplayerid FROM dwd_jordass_lotteryrecord_hi WHERE activitytype = 815 AND tdbank_imp_date LIKE '20250119%') l815
+
+-- 关联其他抽奖活动
+LEFT JOIN (SELECT DISTINCT vplayerid FROM dwd_jordass_lotteryrecord_hi WHERE activitytype = 690 AND tdbank_imp_date BETWEEN '20240426' AND '20240606') l690 ON l815.vplayerid = l690.vplayerid
+LEFT JOIN (SELECT DISTINCT vplayerid FROM dwd_jordass_lotteryrecord_hi WHERE activitytype = 748 AND tdbank_imp_date BETWEEN '20240607' AND '20240725') l748 ON l815.vplayerid = l748.vplayerid
+LEFT JOIN (SELECT DISTINCT vplayerid FROM dwd_jordass_lotteryrecord_hi WHERE activitytype = 750 AND tdbank_imp_date BETWEEN '20240726' AND '20240822') l750 ON l815.vplayerid = l750.vplayerid
+
+-- 关联主套获取记录（addorreduce = 0 表示获得）
+LEFT JOIN (SELECT DISTINCT vplayerid FROM dwd_jordass_gearlog_hi WHERE igoodsid = 430179 AND addorreduce = 0) gear_430179 ON l815.vplayerid = gear_430179.vplayerid
+LEFT JOIN (SELECT DISTINCT vplayerid FROM dwd_jordass_gearlog_hi WHERE igoodsid = 430265 AND addorreduce = 0) gear_430265 ON l815.vplayerid = gear_430265.vplayerid
+LEFT JOIN (SELECT DISTINCT vplayerid FROM dwd_jordass_gearlog_hi WHERE igoodsid = 430225 AND addorreduce = 0) gear_430225 ON l815.vplayerid = gear_430225.vplayerid
+```
+## 失败案例参考
+以下案例曾出现过错误，请避免类似问题：
+### 失败案例 1
+- **SQL ID**: `sql_78`
+- **来源**: CKPT `V6_31.40_1105`
+
+**错误SQL:**
+
+```sql
+WITH first_day_lottery_users AS (
+    SELECT DISTINCT vplayerid
+    FROM dwd_jordass_lotteryrecord_hi
+    WHERE activitytype = 815
+),
+desert_lottery_users AS (
+    SELECT DISTINCT vplayerid
+    FROM dwd_jordass_lotteryrecord_hi
+    WHERE activitytype = 690
+),
+jingjie_lottery_users AS (
+    SELECT DISTINCT vplayerid
+    FROM dwd_jordass_lotteryrecord_hi
+    WHERE activitytype = 748
+),
+xuanlong_lottery_users AS (
+    SELECT DISTINCT vplayerid
+    FROM dwd_jordass_lotteryrecord_hi
+    WHERE activitytype = 750
+),
+desert_mainset_users AS (
+    SELECT DISTINCT vplayerid
+    FROM dwd_jordass_gearlog_hi
+    WHERE igoodsid = 430179 AND addorreduce = 0
+),
+jingjie_mainset_users AS (
+    SELECT DISTINCT vplayerid
+    FROM dwd_jordass_gearlog_hi
+    WHERE igoodsid = 430265 AND addorreduce = 0
+),
+xuanlong_mainset_users AS (
+    SELECT DISTINCT vplayerid
+    FROM dwd_jordass_gearlog_hi
+    WHERE igoodsid = 430225 AND addorreduce = 0
+)
+SELECT 
+    (SELECT COUNT(*) FROM first_day_lottery_users fl JOIN desert_lottery_users dl ON fl.vplayerid = dl.vplayerid) AS '初日华服回归抽奖&沙漠统治者有抽奖人数',
+    (SELECT COUNT(*) FROM first_day_lottery_users fl JOIN jingjie_lottery_users jl ON fl.vplayerid = jl.vplayerid) AS '初日华服回归抽奖&境界双花有抽奖人数',
+    (SELECT COUNT(*) FROM first_day_lottery_users fl JOIN xuanlong_lottery_users xl ON fl.vplayerid = xl.vplayerid) AS '初日华服回归抽奖&玄龙凌霄有抽奖人数',
+    (SELECT COUNT(*) FROM first_day_lottery_users fl 
+     JOIN desert_lottery_users dl ON fl.vplayerid = dl.vplayerid
+     LEFT JOIN desert_mainset_users dm ON fl.vplayerid = dm.vplayerid
+     WHERE dm.vplayerid IS NULL) AS '初日华服回归抽奖&沙漠统治者有抽奖&但没有其主套人数',
+    (SELECT COUNT(*) FROM first_day_lottery_users fl 
+     JOIN jingjie_lottery_users jl ON fl.vplayerid = jl.vplayerid
+     LEFT JOIN jingjie_mainset_users jm ON fl.vplayerid = jm.vplayerid
+     WHERE jm.vplayerid IS NULL) AS '初日华服回归抽奖&境界双花有抽奖&但没有其主套人数',
+    (SELECT COUNT(*) FROM first_day_lottery_users fl 
+     JOIN xuanlong_lottery_users xl ON fl.vplayerid = xl.vplayerid
+     LEFT JOIN xuanlong_mainset_users xm ON fl.vplayerid = xm.vplayerid
+     WHERE xm.vplayerid IS NULL) AS '初日华服回归抽奖&玄龙凌霄有抽奖&但没有其主套人数',
+    (SELECT COUNT(*) FROM first_day_lottery_users fl 
+     JOIN desert_lottery_users dl ON fl.vplayerid = dl.vplayerid
+     JOIN jingjie_lottery_users jl ON fl.vplayerid = jl.vplayerid
+     JOIN desert_mainset_users dm ON fl.vplayerid = dm.vplayerid
+     JOIN jingjie_mainset_users jm ON fl.vplayerid = jm.vplayerid) AS '初日华服回归抽奖&【沙漠统治者和境界双花有主套】人数',
+    (SELECT COUNT(*) FROM first_day_lottery_users fl 
+     JOIN desert_lottery_users dl ON fl.vplayerid = dl.vplayerid
+     JOIN xuanlong_lottery_users xl ON fl.vplayerid = xl.vplayerid
+     JOIN desert_mainset_users dm ON fl.vplayerid = dm.vplayerid
+     JOIN xuanlong_mainset_users xm ON fl.vplayerid = xm.vplayerid) AS '初日华服回归抽奖&【沙漠统治者和玄龙凌霄有主套】人数',
+    (SELECT COUNT(*) FROM first_day_lottery_users fl 
+     JOIN jingjie_lottery_users jl ON fl.vplayerid = jl.vplayerid
+     JOIN xuanlong_lottery_users xl ON fl.vplayerid = xl.vplayerid
+     JOIN jingjie_mainset_users jm ON fl.vplayerid = jm.vplayerid
+     JOIN xuanlong_mainset_users xm ON fl.vplayerid = xm.vplayerid) AS '初日华服回归抽奖&【境界双花和玄龙凌霄有主套】人数',
+    (SELECT COUNT(*) FROM first_day_lottery_users fl 
+     LEFT JOIN desert_lottery_users dl ON fl.vplayerid = dl.vplayerid
+     LEFT JOIN jingjie_lottery_users jl ON fl.vplayerid = jl.vplayerid
+     LEFT JOIN xuanlong_lottery_users xl ON fl.vplayerid = xl.vplayerid
+     WHERE dl.vplayerid IS NULL AND jl.vplayerid IS NULL AND xl.vplayerid IS NULL) AS '初日华服回归抽奖但【沙漠统治者&境界双花&玄龙凌霄】没有抽奖人数'
+```
+
+> **错误原因**: None

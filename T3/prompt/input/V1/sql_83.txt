@@ -1,0 +1,158 @@
+你是一个StarRocks数据库专家，擅长根据业务需求编写准确、高效的SQL查询语句。
+
+# SQL生成任务
+## 用户问题
+统计流失14天以上的回流用户的点击量子鸟赠礼、回到大厅和参与乐园对局的数据
+统计日期
+2024/1/2
+2023/12/19
+2023/12/12
+2023/12/5
+2023/10/10
+2023/9/19
+2023/1/3
+2022/12/20
+输出：统计日（YYYYMMDD）、用户类型（'流失14天以上的回流用户'）、当天回流用户数、点击量子鸟赠礼用户数、回到大厅用户数、当天有参与乐园对局的用户数
+## 涉及表名
+`dws_jordass_matchlog_stat_di`, `dws_jordass_login_df`, `dws_jordass_buttonpress_pre_di`
+## 提示信息
+点击量子鸟赠礼：buttontype =10370
+回到大厅：buttontype 10373或10374  
+流失14天以上的回流用户：统计日往前14天以上没有登陆游戏，在统计日登陆了游戏，比如统计日是2024-1-2，用户在2023-12-19到2024-1-1这14天连续没有登陆游戏，并且在2023-12-18及之前有登陆游戏，就是2024-1-2的流失14天以上的回流用户，其他统计日以此类推。
+## 成功案例参考
+以下案例执行成功，可作为参考：
+### 成功案例 1
+- **SQL ID**: `sql_83`
+- **得分**: 1
+- **来源**: CKPT `V7.1_22.09_1108`
+
+**SQL:**
+
+```sql
+WITH login_data AS (
+    SELECT dtstatdate, vplayerid, cbitmap
+    FROM dws_jordass_login_df
+    WHERE dtstatdate IN ('20240102', '20231219', '20231212', '20231205', '20231010', '20230919', '20230103', '20221220')
+),
+-- 获取统计日当天的回流用户（流失14天以上）
+returning_users AS (
+    SELECT 
+        l.dtstatdate,
+        l.vplayerid
+    FROM login_data l
+    WHERE 
+        -- 当天登录（cbitmap第一位为'1'）
+        SUBSTR(l.cbitmap, 1, 1) = '1'
+        AND (
+            -- 前14天没有登录（第2到15位全为'0'）
+            SUBSTR(l.cbitmap, 2, 14) = REPEAT('0', 14)
+        )
+),
+-- 点击量子鸟赠礼的用户
+quantum_gift_clicks AS (
+    SELECT DISTINCT dtstatdate, vplayerid
+    FROM dws_jordass_buttonpress_pre_di
+    WHERE buttontype = '10370'
+    AND dtstatdate IN ('20240102', '20231219', '20231212', '20231205', '20231010', '20230919', '20230103', '20221220')
+),
+-- 回到大厅的用户
+back_to_lobby AS (
+    SELECT DISTINCT dtstatdate, vplayerid
+    FROM dws_jordass_buttonpress_pre_di
+    WHERE buttontype IN ('10373', '10374')
+    AND dtstatdate IN ('20240102', '20231219', '20231212', '20231205', '20231010', '20230919', '20230103', '20221220')
+),
+-- 参与乐园对局的用户
+played_in_paradise AS (
+    SELECT DISTINCT dtstatdate, vplayerid
+    FROM dws_jordass_matchlog_stat_di
+    WHERE dtstatdate IN ('20240102', '20231219', '20231212', '20231205', '20231010', '20230919', '20230103', '20221220')
+)
+SELECT 
+    r.dtstatdate AS 统计日,
+    '流失14天以上的回流用户' AS 用户类型,
+    COUNT(DISTINCT r.vplayerid) AS 当天回流用户数,
+    COUNT(DISTINCT q.vplayerid) AS 点击量子鸟赠礼用户数,
+    COUNT(DISTINCT b.vplayerid) AS 回到大厅用户数,
+    COUNT(DISTINCT p.vplayerid) AS 当天有参与乐园对局的用户数
+FROM returning_users r
+LEFT JOIN quantum_gift_clicks q ON r.dtstatdate = q.dtstatdate AND r.vplayerid = q.vplayerid
+LEFT JOIN back_to_lobby b ON r.dtstatdate = b.dtstatdate AND r.vplayerid = b.vplayerid
+LEFT JOIN played_in_paradise p ON r.dtstatdate = p.dtstatdate AND r.vplayerid = p.vplayerid
+GROUP BY r.dtstatdate
+ORDER BY r.dtstatdate DESC
+```
+---
+### 成功案例 2
+- **SQL ID**: `sql_83`
+- **得分**: 1
+- **来源**: CKPT `V6_31.40_1105`
+
+**SQL:**
+
+```sql
+WITH target_dates AS (
+  SELECT '20240102' AS dtstatdate UNION ALL
+  SELECT '20231219' UNION ALL
+  SELECT '20231212' UNION ALL
+  SELECT '20231205' UNION ALL
+  SELECT '20231010' UNION ALL
+  SELECT '20230919' UNION ALL
+  SELECT '20230103' UNION ALL
+  SELECT '20221220'
+),
+backflow_users AS (
+  SELECT
+    t.dtstatdate,
+    l.vplayerid
+  FROM target_dates t
+  JOIN dws_jordass_login_df l
+    ON l.dtstatdate = t.dtstatdate
+    AND l.platid = 255
+  WHERE
+    l.dregdate != l.dtstatdate
+    AND SUBSTR(l.cbitmap, 1, 1) = '1'
+    AND SUBSTR(l.cbitmap, 2, 14) = REPEAT('0', 14)
+),
+button_clicks AS (
+  SELECT
+    b.dtstatdate,
+    b.vplayerid,
+    MAX(CASE WHEN b.buttontype = '10370' THEN 1 ELSE 0 END) AS clicked_gift,
+    MAX(CASE WHEN b.buttontype IN ('10373', '10374') THEN 1 ELSE 0 END) AS returned_hall
+  FROM dws_jordass_buttonpress_pre_di b
+  WHERE b.dtstatdate IN ('20240102', '20231219', '20231212', '20231205', '20231010', '20230919', '20230103', '20221220')
+  GROUP BY b.dtstatdate, b.vplayerid
+),
+match_users AS (
+  SELECT
+    m.dtstatdate,
+    m.vplayerid
+  FROM dws_jordass_matchlog_stat_di m
+  WHERE m.dtstatdate IN ('20240102', '20231219', '20231212', '20231205', '20231010', '20230919', '20230103', '20221220')
+  AND m.imode = 255
+),
+user_stats AS (
+  SELECT
+    bu.dtstatdate,
+    bu.vplayerid,
+    COALESCE(bc.clicked_gift, 0) AS clicked_gift,
+    COALESCE(bc.returned_hall, 0) AS returned_hall,
+    CASE WHEN mu.vplayerid IS NOT NULL THEN 1 ELSE 0 END AS played_match
+  FROM backflow_users bu
+  LEFT JOIN button_clicks bc
+    ON bu.dtstatdate = bc.dtstatdate AND bu.vplayerid = bc.vplayerid
+  LEFT JOIN match_users mu
+    ON bu.dtstatdate = mu.dtstatdate AND bu.vplayerid = mu.vplayerid
+)
+SELECT
+  us.dtstatdate AS `统计日（YYYYMMDD）`,
+  '流失14天以上的回流用户' AS `用户类型`,
+  COUNT(DISTINCT us.vplayerid) AS `当天回流用户数`,
+  COUNT(DISTINCT CASE WHEN us.clicked_gift = 1 THEN us.vplayerid END) AS `点击量子鸟赠礼用户数`,
+  COUNT(DISTINCT CASE WHEN us.returned_hall = 1 THEN us.vplayerid END) AS `回到大厅用户数`,
+  COUNT(DISTINCT CASE WHEN us.played_match = 1 THEN us.vplayerid END) AS `当天有参与乐园对局的用户数`
+FROM user_stats us
+GROUP BY us.dtstatdate
+ORDER BY us.dtstatdate DESC;
+```

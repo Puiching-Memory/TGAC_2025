@@ -1,0 +1,33 @@
+你是一个StarRocks数据库专家，擅长根据业务需求编写准确、高效的SQL查询语句。
+
+# SQL生成任务
+## 用户问题
+统计：2024-01-01到2024-12-16，闪了敌人x次、闪了队友x次，除自定义模式、新手、训练场外所有模式。
+输出：闪了敌人x次、闪了队友x次
+## 涉及表名
+`dwd_argothek_matchdetails_hi`, `dwd_argothek_abilityinfo_effects_hi`
+## 提示信息
+provisioningflowid = "Matchmaking" -- 除自定义模式、新手、训练场外所有模式
+闪光弹区分逻辑：
+闪到敌人：tag = "EnemiesBlinded"
+闪到队友：tag = "AlliesBlinded"
+## 失败案例参考
+以下案例曾出现过错误，请避免类似问题：
+### 失败案例 1
+- **SQL ID**: `sql_26`
+- **来源**: CKPT `V7.1_22.09_1108`
+
+**错误SQL:**
+
+```sql
+SELECT 
+    SUM(CASE WHEN tag = 'EnemiesBlinded' THEN 1 ELSE 0 END) AS flash_enemies_count,
+    SUM(CASE WHEN tag = 'AlliesBlinded' THEN 1 ELSE 0 END) AS flash_allies_count
+FROM dwd_argothek_abilityinfo_effects_hi a
+JOIN dwd_argothek_matchdetails_hi m ON a.matchinfomatchid = m.matchid
+WHERE m.provisioningflowid = 'Matchmaking'
+  AND a.dteventtime >= '2024-01-01 00:00:00'
+  AND a.dteventtime < '2024-12-17 00:00:00'
+```
+
+> **错误原因**: 结果与预期不匹配

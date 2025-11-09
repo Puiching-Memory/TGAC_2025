@@ -1,5 +1,0 @@
-[用户问题]: 统计20240101-20250601全平台每天充值金额数和消耗金币数
-输出：统计日期(yyyymmdd)，充值金额数，消耗金币数  
-[涉及表名]: ['dws_jordass_water_di', 'dwd_jordass_currencylog_hi'] 
-[提示]: 消耗金币：AddOrReduce=1 and imoneytype=1
- 充值和消耗金币都直接使用imoney  

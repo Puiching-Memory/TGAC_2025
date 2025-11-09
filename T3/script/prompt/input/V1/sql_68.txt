@@ -1,5 +1,0 @@
-[用户问题]: 统计时间范围：25.1.28-25.2.10，新春华服id：848，841 
-输出：日期（YYDDMM），人数  
-[涉及表名]: ['dwd_jordass_lotteryrecord_hi'] 
-[提示]: 新春华服：
-activitytype in (848, 841)

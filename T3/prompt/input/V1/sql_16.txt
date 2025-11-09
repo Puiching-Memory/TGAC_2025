@@ -1,0 +1,72 @@
+你是一个StarRocks数据库专家，擅长根据业务需求编写准确、高效的SQL查询语句。
+
+# SQL生成任务
+## 用户问题
+统计：近一年（2023/7/12-2025/5/31）按段位统计所有竞技模式对局中，排除掉投降的对局情况。
+输出：日期（20230712-20250531）、段位（黑铁、...、无段位、全量段位）当日竞技模式非投降局对局数、当日竞技模式投降局对局数、当日竞技模式非投降局中 双方胜利回合差>=6和双方胜利回合差>=8的对局数
+## 涉及表名
+`dwd_argothek_playermatchstats_hi`
+## 提示信息
+段位筛选逻辑：
+case
+when competitiveTier in (3, 4, 5) then "黑铁"
+when competitiveTier in (6, 7, 8) then "黄铜"
+when competitiveTier in (9, 10, 11) then "白银"
+when competitiveTier in (12, 13, 14) then "黄金"
+when competitiveTier in (15, 16, 17) then "白金"
+when competitiveTier in (18, 19, 20) then "钻石"
+when competitiveTier in (21, 22, 23) then "超凡"
+when competitiveTier >= 24 then "神话及以上"
+else "无段位"
+竞技模式：模式id等于"competitive"
+对局筛选逻辑:
+使用completion_state筛选投降与非投降对局；使用roundsdiff筛选双方胜利回合差
+## 失败案例参考
+以下案例曾出现过错误，请避免类似问题：
+### 失败案例 1
+- **SQL ID**: `sql_16`
+- **来源**: CKPT `V7.1_22.09_1108`
+
+**错误SQL:**
+
+```sql
+SELECT
+    SUBSTR(dteventtime, 1, 10) AS event_date,
+    CASE
+        WHEN competitiveTier IN (3, 4, 5) THEN '黑铁'
+        WHEN competitiveTier IN (6, 7, 8) THEN '黄铜'
+        WHEN competitiveTier IN (9, 10, 11) THEN '白银'
+        WHEN competitiveTier IN (12, 13, 14) THEN '黄金'
+        WHEN competitiveTier IN (15, 16, 17) THEN '白金'
+        WHEN competitiveTier IN (18, 19, 20) THEN '钻石'
+        WHEN competitiveTier IN (21, 22, 23) THEN '超凡'
+        WHEN competitiveTier >= 24 THEN '神话及以上'
+        ELSE '无段位'
+    END AS tier_group,
+    COUNT(*) FILTER (WHERE completionstate = 'Completed') AS non_surrender_matches,
+    COUNT(*) FILTER (WHERE completionstate != 'Completed' OR completionstate IS NULL) AS surrender_matches,
+    COUNT(*) FILTER (WHERE completionstate = 'Completed' AND 
+                   ABS(roundswon - (roundsplayed - roundswon)) >= 6) AS diff_ge_6,
+    COUNT(*) FILTER (WHERE completionstate = 'Completed' AND 
+                   ABS(roundswon - (roundsplayed - roundswon)) >= 8) AS diff_ge_8
+FROM dwd_argothek_playermatchstats_hi
+WHERE queueid = 'competitive'
+  AND dteventtime >= '2023-07-12 00:00:00'
+  AND dteventtime < '2025-06-01 00:00:00'
+GROUP BY
+    SUBSTR(dteventtime, 1, 10),
+    CASE
+        WHEN competitiveTier IN (3, 4, 5) THEN '黑铁'
+        WHEN competitiveTier IN (6, 7, 8) THEN '黄铜'
+        WHEN competitiveTier IN (9, 10, 11) THEN '白银'
+        WHEN competitiveTier IN (12, 13, 14) THEN '黄金'
+        WHEN competitiveTier IN (15, 16, 17) THEN '白金'
+        WHEN competitiveTier IN (18, 19, 20) THEN '钻石'
+        WHEN competitiveTier IN (21, 22, 23) THEN '超凡'
+        WHEN competitiveTier >= 24 THEN '神话及以上'
+        ELSE '无段位'
+    END
+ORDER BY event_date, tier_group;
+```
+
+> **错误原因**: 结果与预期不匹配

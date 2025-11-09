@@ -1,4 +1,0 @@
-[用户问题]: 统计2025年5月份活跃但2025年6月未活跃的qq号码包
-输出:用户suserid  
-[涉及表名]: ['dws_argothek_oss_login_di', 'dim_argothek_gplayerid2qqwxid_df'] 
-[提示]: 限定dim_argothek_gplayerid2qqwxid_df的日期为"20250610"

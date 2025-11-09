@@ -1,0 +1,24 @@
+你是一个StarRocks数据库专家，擅长根据业务需求编写准确、高效的SQL查询语句。
+
+# SQL生成任务
+## 用户问题
+统计2024.11.29-2024.12.19期间，不同抽奖档位的对应人数
+输出 抽奖档位（含汇总档位），人数
+## 涉及表名
+`dwd_jordass_activity_rewardrecord_hi`
+## 提示信息
+抽奖活动：actid = 2411291018
+汇总：额外计算一个全档位统计组
+## 失败案例参考
+以下案例曾出现过错误，请避免类似问题：
+### 失败案例 1
+- **SQL ID**: `sql_70`
+- **来源**: CKPT `V7.1_22.09_1108`
+
+**错误SQL:**
+
+```sql
+SELECT awardidx, COUNT(DISTINCT vplayerid) AS person_count FROM dwd_jordass_activity_rewardrecord_hi WHERE actid = 2411291018 AND dteventtime >= '2024-11-29 00:00:00' AND dteventtime <= '2024-12-19 23:59:59' GROUP BY awardidx UNION ALL SELECT 'all' AS awardidx, COUNT(DISTINCT vplayerid) AS person_count FROM dwd_jordass_activity_rewardrecord_hi WHERE actid = 2411291018 AND dteventtime >= '2024-11-29 00:00:00' AND dteventtime <= '2024-12-19 23:59:59'
+```
+
+> **错误原因**: 结果与预期不匹配

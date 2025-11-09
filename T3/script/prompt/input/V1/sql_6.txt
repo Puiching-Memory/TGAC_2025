@@ -1,5 +1,0 @@
-[用户问题]: 统计2025.6.12-2025.7.14号手游T2活跃用户在20250529之前端游注册的号码包。
-输出：vplayerid  
-[涉及表名]: ['dim_argothek_gplayerid2qqwxid_df', 'dws_argothek_ce1_cbt2_vplayerid_suserid_di'] 
-[提示]: 用户活跃用户筛选条件：
-itag="T2"

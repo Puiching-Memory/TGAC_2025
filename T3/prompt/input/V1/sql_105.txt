@@ -1,0 +1,31 @@
+你是一个StarRocks数据库专家，擅长根据业务需求编写准确、高效的SQL查询语句。
+
+# SQL生成任务
+## 用户问题
+统计20240101-20250601全平台每天充值金额数和消耗金币数
+输出：统计日期(yyyymmdd)，充值金额数，消耗金币数
+## 涉及表名
+`dws_jordass_water_di`, `dwd_jordass_currencylog_hi`
+## 提示信息
+消耗金币：AddOrReduce=1 and imoneytype=1
+ 充值和消耗金币都直接使用imoney  
+## 失败案例参考
+以下案例曾出现过错误，请避免类似问题：
+### 失败案例 1
+- **SQL ID**: `sql_105`
+- **来源**: CKPT `V7.1_22.09_1108`
+
+**错误SQL:**
+
+```sql
+SELECT 
+    SUBSTR(tdbank_imp_date, 1, 8) AS dtstatdate,
+    SUM(CASE WHEN addorreduce = 0 AND imoneytype = 1 THEN imoney ELSE 0 END) AS recharge_amount,
+    SUM(CASE WHEN addorreduce = 1 AND imoneytype = 1 THEN imoney ELSE 0 END) AS consume_gold
+FROM dwd_jordass_currencylog_hi
+WHERE SUBSTR(tdbank_imp_date, 1, 8) BETWEEN '20240101' AND '20250601'
+GROUP BY SUBSTR(tdbank_imp_date, 1, 8)
+ORDER BY dtstatdate;
+```
+
+> **错误原因**: 结果与预期不匹配

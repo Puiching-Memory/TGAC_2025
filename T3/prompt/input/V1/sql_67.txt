@@ -1,0 +1,41 @@
+你是一个StarRocks数据库专家，擅长根据业务需求编写准确、高效的SQL查询语句。
+
+# SQL生成任务
+## 用户问题
+统计2025.1.24-2025.2.6时间区间内，道具为430487,430485,602004025,602002011 的产出次数	
+输出：道具id，产出次数
+## 涉及表名
+`dwd_jordass_gearlog_hi`
+## 提示信息
+ addorreduce=0表示产出，1表示消耗
+## 成功案例参考
+以下案例执行成功，可作为参考：
+### 成功案例 1
+- **SQL ID**: `sql_67`
+- **得分**: 1
+- **来源**: CKPT `V7.1_22.09_1108`
+
+**SQL:**
+
+```sql
+SELECT igoodsid, COUNT(*) AS production_count FROM dwd_jordass_gearlog_hi WHERE addorreduce = 0 AND igoodsid IN (430487, 430485, 602004025, 602002011) AND dteventtime >= '2025-01-24 00:00:00' AND dteventtime < '2025-02-07 00:00:00' GROUP BY igoodsid
+```
+---
+### 成功案例 2
+- **SQL ID**: `sql_67`
+- **得分**: 1
+- **来源**: CKPT `V6_31.40_1105`
+
+**SQL:**
+
+```sql
+SELECT 
+    igoodsid,
+    COUNT(*) as 产出次数
+FROM dwd_jordass_gearlog_hi
+WHERE tdbank_imp_date >= '2025012400' 
+    AND tdbank_imp_date <= '2025020623'
+    AND igoodsid IN (430487, 430485, 602004025, 602002011)
+    AND addorreduce = 0
+GROUP BY igoodsid
+```

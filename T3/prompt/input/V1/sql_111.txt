@@ -1,0 +1,158 @@
+你是一个StarRocks数据库专家，擅长根据业务需求编写准确、高效的SQL查询语句。
+
+# SQL生成任务
+## 用户问题
+统计20220425突变组竞2.0局内数据需求感染人类坐标热区（人类的坐标）  按天分布，重点关注
+类型包括：（变身速行战士，变身隐形战士，变身钩链战士，变身强能猎手，变身冰霜领主，变身强化战士，变身龙焰猎手）
+
+输出：统计日期(yyyymmdd)，类型，x,y,z,次数
+## 涉及表名
+`dwd_jordass_vsteaminfectlog_hi`
+## 提示信息
+每个类型都要限制各自字段不为空
+各种类型计算方式：
+变身速行战士 用 SwiftMorphInfo 取坐标（数组下标3,4,5对应x,y,z）
+变身隐形战士 用 StealthMorphInfo 取坐标（数组下标3,4,5对应x,y,z）
+变身钩链战士 用 GrappleMorphInfo 取坐标（数组下标3,4,5对应x,y,z）
+变身强能猎手 用 HeroMorphInfo 取坐标（数组下标3,4,5对应x,y,z）
+变身冰霜领主 用 IceAdvMorphInfo 取坐标（数组下标3,4,5对应x,y,z）
+变身强化战士 用 PowerAdvMorphInfo 取坐标（数组下标3,4,5对应x,y,z）
+变身龙焰猎手 用 DragonHeroMorphInfo 取坐标（数组下标3,4,5对应x,y,z）
+坐标保留一位小数点
+## 失败案例参考
+以下案例曾出现过错误，请避免类似问题：
+### 失败案例 1
+- **SQL ID**: `sql_111`
+- **来源**: CKPT `V7.1_22.09_1108`
+
+**错误SQL:**
+
+```sql
+SELECT 
+    '20220425' as stat_date,
+    '变身速行战士' as type,
+    ROUND(CAST(SPLIT(swiftmorphinfo, '+')[4] AS DECIMAL(10,2)), 1) as x,
+    ROUND(CAST(SPLIT(swiftmorphinfo, '+')[5] AS DECIMAL(10,2)), 1) as y,
+    ROUND(CAST(SPLIT(swiftmorphinfo, '+')[6] AS DECIMAL(10,2)), 1) as z,
+    COUNT(*) as cnt
+FROM dwd_jordass_vsteaminfectlog_hi 
+WHERE tdbank_imp_date LIKE '20220425%' 
+    AND swiftmorphinfo IS NOT NULL 
+    AND LENGTH(swiftmorphinfo) > 0
+GROUP BY 
+    SPLIT(swiftmorphinfo, '+')[4],
+    SPLIT(swiftmorphinfo, '+')[5],
+    SPLIT(swiftmorphinfo, '+')[6]
+
+UNION ALL
+
+SELECT 
+    '20220425' as stat_date,
+    '变身隐形战士' as type,
+    ROUND(CAST(SPLIT(stealthmorphinfo, '+')[4] AS DECIMAL(10,2)), 1) as x,
+    ROUND(CAST(SPLIT(stealthmorphinfo, '+')[5] AS DECIMAL(10,2)), 1) as y,
+    ROUND(CAST(SPLIT(stealthmorphinfo, '+')[6] AS DECIMAL(10,2)), 1) as z,
+    COUNT(*) as cnt
+FROM dwd_jordass_vsteaminfectlog_hi 
+WHERE tdbank_imp_date LIKE '20220425%' 
+    AND stealthmorphinfo IS NOT NULL 
+    AND LENGTH(stealthmorphinfo) > 0
+GROUP BY 
+    SPLIT(stealthmorphinfo, '+')[4],
+    SPLIT(stealthmorphinfo, '+')[5],
+    SPLIT(stealthmorphinfo, '+')[6]
+
+UNION ALL
+
+SELECT 
+    '20220425' as stat_date,
+    '变身钩链战士' as type,
+    ROUND(CAST(SPLIT(grapplemorphinfo, '+')[4] AS DECIMAL(10,2)), 1) as x,
+    ROUND(CAST(SPLIT(grapplemorphinfo, '+')[5] AS DECIMAL(10,2)), 1) as y,
+    ROUND(CAST(SPLIT(grapplemorphinfo, '+')[6] AS DECIMAL(10,2)), 1) as z,
+    COUNT(*) as cnt
+FROM dwd_jordass_vsteaminfectlog_hi 
+WHERE tdbank_imp_date LIKE '20220425%' 
+    AND grapplemorphinfo IS NOT NULL 
+    AND LENGTH(grapplemorphinfo) > 0
+GROUP BY 
+    SPLIT(grapplemorphinfo, '+')[4],
+    SPLIT(grapplemorphinfo, '+')[5],
+    SPLIT(grapplemorphinfo, '+')[6]
+
+UNION ALL
+
+SELECT 
+    '20220425' as stat_date,
+    '变身强能猎手' as type,
+    ROUND(CAST(SPLIT(heromorphinfo, '+')[4] AS DECIMAL(10,2)), 1) as x,
+    ROUND(CAST(SPLIT(heromorphinfo, '+')[5] AS DECIMAL(10,2)), 1) as y,
+    ROUND(CAST(SPLIT(heromorphinfo, '+')[6] AS DECIMAL(10,2)), 1) as z,
+    COUNT(*) as cnt
+FROM dwd_jordass_vsteaminfectlog_hi 
+WHERE tdbank_imp_date LIKE '20220425%' 
+    AND heromorphinfo IS NOT NULL 
+    AND LENGTH(heromorphinfo) > 0
+GROUP BY 
+    SPLIT(heromorphinfo, '+')[4],
+    SPLIT(heromorphinfo, '+')[5],
+    SPLIT(heromorphinfo, '+')[6]
+
+UNION ALL
+
+SELECT 
+    '20220425' as stat_date,
+    '变身冰霜领主' as type,
+    ROUND(CAST(SPLIT(iceadvmorphinfo, '+')[4] AS DECIMAL(10,2)), 1) as x,
+    ROUND(CAST(SPLIT(iceadvmorphinfo, '+')[5] AS DECIMAL(10,2)), 1) as y,
+    ROUND(CAST(SPLIT(iceadvmorphinfo, '+')[6] AS DECIMAL(10,2)), 1) as z,
+    COUNT(*) as cnt
+FROM dwd_jordass_vsteaminfectlog_hi 
+WHERE tdbank_imp_date LIKE '20220425%' 
+    AND iceadvmorphinfo IS NOT NULL 
+    AND LENGTH(iceadvmorphinfo) > 0
+GROUP BY 
+    SPLIT(iceadvmorphinfo, '+')[4],
+    SPLIT(iceadvmorphinfo, '+')[5],
+    SPLIT(iceadvmorphinfo, '+')[6]
+
+UNION ALL
+
+SELECT 
+    '20220425' as stat_date,
+    '变身强化战士' as type,
+    ROUND(CAST(SPLIT(poweradvmorphinfo, '+')[4] AS DECIMAL(10,2)), 1) as x,
+    ROUND(CAST(SPLIT(poweradvmorphinfo, '+')[5] AS DECIMAL(10,2)), 1) as y,
+    ROUND(CAST(SPLIT(poweradvmorphinfo, '+')[6] AS DECIMAL(10,2)), 1) as z,
+    COUNT(*) as cnt
+FROM dwd_jordass_vsteaminfectlog_hi 
+WHERE tdbank_imp_date LIKE '20220425%' 
+    AND poweradvmorphinfo IS NOT NULL 
+    AND LENGTH(poweradvmorphinfo) > 0
+GROUP BY 
+    SPLIT(poweradvmorphinfo, '+')[4],
+    SPLIT(poweradvmorphinfo, '+')[5],
+    SPLIT(poweradvmorphinfo, '+')[6]
+
+UNION ALL
+
+SELECT 
+    '20220425' as stat_date,
+    '变身龙焰猎手' as type,
+    ROUND(CAST(SPLIT(dragonheromorphinfo, '+')[4] AS DECIMAL(10,2)), 1) as x,
+    ROUND(CAST(SPLIT(dragonheromorphinfo, '+')[5] AS DECIMAL(10,2)), 1) as y,
+    ROUND(CAST(SPLIT(dragonheromorphinfo, '+')[6] AS DECIMAL(10,2)), 1) as z,
+    COUNT(*) as cnt
+FROM dwd_jordass_vsteaminfectlog_hi 
+WHERE tdbank_imp_date LIKE '20220425%' 
+    AND dragonheromorphinfo IS NOT NULL 
+    AND LENGTH(dragonheromorphinfo) > 0
+GROUP BY 
+    SPLIT(dragonheromorphinfo, '+')[4],
+    SPLIT(dragonheromorphinfo, '+')[5],
+    SPLIT(dragonheromorphinfo, '+')[6]
+
+ORDER BY type, cnt DESC
+```
+
+> **错误原因**: 结果与预期不匹配

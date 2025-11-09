@@ -1,0 +1,293 @@
+你是一个StarRocks数据库专家，擅长根据业务需求编写准确、高效的SQL查询语句。
+
+# SQL生成任务
+## 用户问题
+统计2024.10.1-2024.10.31期间点击400211，点击400212，点击400211及400212的重合用户作为用户类型，看不同性别、砺刃活跃度和乐园活跃度情况
+
+输出：用户类型（400211、400212、400211&400212、other），游戏角色性别（male、female、other）、乐园活跃度（light、medium、heavy、other）、砺刃活跃度（light、medium、heavy、other），人数
+
+乐园跟砺刃的活跃度： 轻度1-4天；中度5-15天；重度>=16天
+## 涉及表名
+`dws_jordass_matchlog_stat_di`, `dws_jordass_login_di`, `dwd_jordass_playerlogin_hi`, `dws_jordass_buttonpress_pre_di`
+## 提示信息
+性别根据时间开窗取最新一条
+## 成功案例参考
+以下案例执行成功，可作为参考：
+### 成功案例 1
+- **SQL ID**: `sql_50`
+- **得分**: 1
+- **来源**: CKPT `V6_31.40_1105`
+
+**SQL:**
+
+```sql
+WITH button_users AS (
+    -- 获取在指定时间范围内点击400211和400212的用户
+    SELECT 
+        vplayerid,
+        buttontype,
+        COUNT(*) as click_count
+    FROM dws_jordass_buttonpress_pre_di
+    WHERE dtstatdate >= '20241001' AND dtstatdate <= '20241031'
+      AND buttontype IN ('400211', '400212')
+    GROUP BY vplayerid, buttontype
+),
+user_type_classification AS (
+    -- 将用户分为不同类别
+    SELECT 
+        vplayerid,
+        CASE 
+            WHEN SUM(CASE WHEN buttontype = '400211' THEN 1 ELSE 0 END) > 0 
+                 AND SUM(CASE WHEN buttontype = '400212' THEN 1 ELSE 0 END) > 0 THEN '400211&400212'
+            WHEN SUM(CASE WHEN buttontype = '400211' THEN 1 ELSE 0 END) > 0 THEN '400211'
+            WHEN SUM(CASE WHEN buttontype = '400212' THEN 1 ELSE 0 END) > 0 THEN '400212'
+            ELSE 'other'
+        END as user_type
+    FROM button_users
+    GROUP BY vplayerid
+),
+gender_data AS (
+    -- 获取用户最新的性别信息
+    SELECT 
+        vplayerid,
+        gender,
+        ROW_NUMBER() OVER (PARTITION BY vplayerid ORDER BY dteventtime DESC) as rn
+    FROM dwd_jordass_playerlogin_hi
+    WHERE dteventtime >= '2024-10-01 00:00:00' AND dteventtime <= '2024-10-31 23:59:59'
+),
+gender_latest AS (
+    SELECT 
+        vplayerid,
+        CASE 
+            WHEN gender = 1 THEN 'male'
+            WHEN gender = 2 THEN 'female'
+            ELSE 'other'
+        END as gender_type
+    FROM gender_data
+    WHERE rn = 1
+),
+login_days AS (
+    -- 计算每个用户在指定时间范围内的登录天数
+    SELECT 
+        vplayerid,
+        COUNT(DISTINCT dtstatdate) as login_days
+    FROM dws_jordass_login_di
+    WHERE dtstatdate >= '20241001' AND dtstatdate <= '20241031'
+    GROUP BY vplayerid
+),
+matchlog_days AS (
+    -- 计算每个用户在指定时间范围内的乐园活跃天数
+    SELECT 
+        vplayerid,
+        COUNT(DISTINCT dtstatdate) as matchlog_days
+    FROM dws_jordass_matchlog_stat_di
+    WHERE dtstatdate >= '20241001' AND dtstatdate <= '20241031'
+    GROUP BY vplayerid
+)
+SELECT 
+    ut.user_type,
+    COALESCE(gl.gender_type, 'other') as gender,
+    CASE 
+        WHEN COALESCE(md.matchlog_days, 0) >= 1 AND COALESCE(md.matchlog_days, 0) <= 4 THEN 'light'
+        WHEN COALESCE(md.matchlog_days, 0) >= 5 AND COALESCE(md.matchlog_days, 0) <= 15 THEN 'medium'
+        WHEN COALESCE(md.matchlog_days, 0) >= 16 THEN 'heavy'
+        ELSE 'other'
+    END as乐园活跃度,
+    CASE 
+        WHEN COALESCE(ld.login_days, 0) >= 1 AND COALESCE(ld.login_days, 0) <= 4 THEN 'light'
+        WHEN COALESCE(ld.login_days, 0) >= 5 AND COALESCE(ld.login_days, 0) <= 15 THEN 'medium'
+        WHEN COALESCE(ld.login_days, 0) >= 16 THEN 'heavy'
+        ELSE 'other'
+    END as砺刃活跃度,
+    COUNT(*) as 人数
+FROM user_type_classification ut
+LEFT JOIN gender_latest gl ON ut.vplayerid = gl.vplayerid
+LEFT JOIN login_days ld ON ut.vplayerid = ld.vplayerid
+LEFT JOIN matchlog_days md ON ut.vplayerid = md.vplayerid
+GROUP BY 
+    ut.user_type,
+    COALESCE(gl.gender_type, 'other'),
+    CASE 
+        WHEN COALESCE(md.matchlog_days, 0) >= 1 AND COALESCE(md.matchlog_days, 0) <= 4 THEN 'light'
+        WHEN COALESCE(md.matchlog_days, 0) >= 5 AND COALESCE(md.matchlog_days, 0) <= 15 THEN 'medium'
+        WHEN COALESCE(md.matchlog_days, 0) >= 16 THEN 'heavy'
+        ELSE 'other'
+    END,
+    CASE 
+        WHEN COALESCE(ld.login_days, 0) >= 1 AND COALESCE(ld.login_days, 0) <= 4 THEN 'light'
+        WHEN COALESCE(ld.login_days, 0) >= 5 AND COALESCE(ld.login_days, 0) <= 15 THEN 'medium'
+        WHEN COALESCE(ld.login_days, 0) >= 16 THEN 'heavy'
+        ELSE 'other'
+    END
+ORDER BY ut.user_type, COALESCE(gl.gender_type, 'other');
+```
+---
+### 成功案例 2
+- **SQL ID**: `sql_50`
+- **得分**: 1
+- **来源**: CKPT `V6.2_33.72_1109`
+
+**SQL:**
+
+```sql
+WITH button_users AS (
+    -- 获取在指定时间范围内点击400211和400212的用户
+    SELECT 
+        vplayerid,
+        buttontype,
+        COUNT(*) as click_count
+    FROM dws_jordass_buttonpress_pre_di
+    WHERE dtstatdate >= '20241001' AND dtstatdate <= '20241031'
+      AND buttontype IN ('400211', '400212')
+    GROUP BY vplayerid, buttontype
+),
+user_type_classification AS (
+    -- 将用户分为不同类别
+    SELECT 
+        vplayerid,
+        CASE 
+            WHEN SUM(CASE WHEN buttontype = '400211' THEN 1 ELSE 0 END) > 0 
+                 AND SUM(CASE WHEN buttontype = '400212' THEN 1 ELSE 0 END) > 0 THEN '400211&400212'
+            WHEN SUM(CASE WHEN buttontype = '400211' THEN 1 ELSE 0 END) > 0 THEN '400211'
+            WHEN SUM(CASE WHEN buttontype = '400212' THEN 1 ELSE 0 END) > 0 THEN '400212'
+            ELSE 'other'
+        END as user_type
+    FROM button_users
+    GROUP BY vplayerid
+),
+gender_data AS (
+    -- 获取用户最新的性别信息
+    SELECT 
+        vplayerid,
+        gender,
+        ROW_NUMBER() OVER (PARTITION BY vplayerid ORDER BY dteventtime DESC) as rn
+    FROM dwd_jordass_playerlogin_hi
+    WHERE dteventtime >= '2024-10-01 00:00:00' AND dteventtime <= '2024-10-31 23:59:59'
+),
+gender_latest AS (
+    SELECT 
+        vplayerid,
+        CASE 
+            WHEN gender = 1 THEN 'male'
+            WHEN gender = 2 THEN 'female'
+            ELSE 'other'
+        END as gender_type
+    FROM gender_data
+    WHERE rn = 1
+),
+login_days AS (
+    -- 计算每个用户在指定时间范围内的登录天数
+    SELECT 
+        vplayerid,
+        COUNT(DISTINCT dtstatdate) as login_days
+    FROM dws_jordass_login_di
+    WHERE dtstatdate >= '20241001' AND dtstatdate <= '20241031'
+    GROUP BY vplayerid
+),
+matchlog_days AS (
+    -- 计算每个用户在指定时间范围内的乐园活跃天数
+    SELECT 
+        vplayerid,
+        COUNT(DISTINCT dtstatdate) as matchlog_days
+    FROM dws_jordass_matchlog_stat_di
+    WHERE dtstatdate >= '20241001' AND dtstatdate <= '20241031'
+    GROUP BY vplayerid
+)
+SELECT 
+    ut.user_type,
+    COALESCE(gl.gender_type, 'other') as gender,
+    CASE 
+        WHEN COALESCE(md.matchlog_days, 0) >= 1 AND COALESCE(md.matchlog_days, 0) <= 4 THEN 'light'
+        WHEN COALESCE(md.matchlog_days, 0) >= 5 AND COALESCE(md.matchlog_days, 0) <= 15 THEN 'medium'
+        WHEN COALESCE(md.matchlog_days, 0) >= 16 THEN 'heavy'
+        ELSE 'other'
+    END as乐园活跃度,
+    CASE 
+        WHEN COALESCE(ld.login_days, 0) >= 1 AND COALESCE(ld.login_days, 0) <= 4 THEN 'light'
+        WHEN COALESCE(ld.login_days, 0) >= 5 AND COALESCE(ld.login_days, 0) <= 15 THEN 'medium'
+        WHEN COALESCE(ld.login_days, 0) >= 16 THEN 'heavy'
+        ELSE 'other'
+    END as砺刃活跃度,
+    COUNT(*) as 人数
+FROM user_type_classification ut
+LEFT JOIN gender_latest gl ON ut.vplayerid = gl.vplayerid
+LEFT JOIN login_days ld ON ut.vplayerid = ld.vplayerid
+LEFT JOIN matchlog_days md ON ut.vplayerid = md.vplayerid
+GROUP BY 
+    ut.user_type,
+    COALESCE(gl.gender_type, 'other'),
+    CASE 
+        WHEN COALESCE(md.matchlog_days, 0) >= 1 AND COALESCE(md.matchlog_days, 0) <= 4 THEN 'light'
+        WHEN COALESCE(md.matchlog_days, 0) >= 5 AND COALESCE(md.matchlog_days, 0) <= 15 THEN 'medium'
+        WHEN COALESCE(md.matchlog_days, 0) >= 16 THEN 'heavy'
+        ELSE 'other'
+    END,
+    CASE 
+        WHEN COALESCE(ld.login_days, 0) >= 1 AND COALESCE(ld.login_days, 0) <= 4 THEN 'light'
+        WHEN COALESCE(ld.login_days, 0) >= 5 AND COALESCE(ld.login_days, 0) <= 15 THEN 'medium'
+        WHEN COALESCE(ld.login_days, 0) >= 16 THEN 'heavy'
+        ELSE 'other'
+    END
+ORDER BY ut.user_type, COALESCE(gl.gender_type, 'other');
+```
+## 失败案例参考
+以下案例曾出现过错误，请避免类似问题：
+### 失败案例 1
+- **SQL ID**: `sql_50`
+- **来源**: CKPT `V7.1_22.09_1108`
+
+**错误SQL:**
+
+```sql
+SELECT 
+    ut.user_type,
+    pg.gender,
+    CASE 
+        WHEN ld.total_login_days BETWEEN 1 AND 4 THEN 'light'
+        WHEN ld.total_login_days BETWEEN 5 AND 15 THEN 'medium'
+        WHEN ld.total_login_days >= 16 THEN 'heavy'
+        ELSE 'other'
+    END AS leiting_active_level,
+    'other' AS park_active_level,
+    COUNT(*) as user_count
+FROM (
+    SELECT 
+        CASE 
+            WHEN b1.vplayerid IS NOT NULL AND b2.vplayerid IS NOT NULL THEN '400211&400212'
+            WHEN b1.vplayerid IS NOT NULL THEN '400211'
+            WHEN b2.vplayerid IS NOT NULL THEN '400212'
+            ELSE 'other'
+        END AS user_type,
+        COALESCE(b1.vplayerid, b2.vplayerid) AS vplayerid
+    FROM 
+        (SELECT DISTINCT vplayerid FROM dws_jordass_buttonpress_pre_di WHERE buttontype = '400211' AND dtstatdate BETWEEN '20241001' AND '20241031') b1 
+        FULL OUTER JOIN 
+        (SELECT DISTINCT vplayerid FROM dws_jordass_buttonpress_pre_di WHERE buttontype = '400212' AND dtstatdate BETWEEN '20241001' AND '20241031') b2 
+        ON b1.vplayerid = b2.vplayerid
+) ut
+LEFT JOIN (
+    SELECT vplayerid, SUM(login_days) as total_login_days 
+    FROM (
+        SELECT vplayerid, COUNT(*) as login_days 
+        FROM dws_jordass_login_di 
+        WHERE dtstatdate BETWEEN '20241001' AND '20241031' 
+        GROUP BY dtstatdate, vplayerid
+    ) t 
+    GROUP BY vplayerid
+) ld ON ut.vplayerid = ld.vplayerid
+LEFT JOIN (
+    SELECT vplayerid, MAX(CASE WHEN gender = 1 THEN 'male' WHEN gender = 2 THEN 'female' ELSE 'other' END) as gender 
+    FROM dwd_jordass_playerlogin_hi 
+    GROUP BY vplayerid
+) pg ON ut.vplayerid = pg.vplayerid
+GROUP BY ut.user_type, pg.gender, 
+    CASE 
+        WHEN ld.total_login_days BETWEEN 1 AND 4 THEN 'light'
+        WHEN ld.total_login_days BETWEEN 5 AND 15 THEN 'medium'
+        WHEN ld.total_login_days >= 16 THEN 'heavy'
+        ELSE 'other'
+    END
+ORDER BY ut.user_type, pg.gender, leiting_active_level
+```
+
+> **错误原因**: 结果与预期不匹配

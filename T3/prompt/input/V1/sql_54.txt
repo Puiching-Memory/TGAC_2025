@@ -1,0 +1,24 @@
+你是一个StarRocks数据库专家，擅长根据业务需求编写准确、高效的SQL查询语句。
+
+# SQL生成任务
+## 用户问题
+统计2024.9.20到2024.10.20期间matchmode=1003 每种玩法参与周期内的日均参与人数和日均玩法次留
+输出：玩法、上线日期、下线日期、日均参与人数、日均玩法次留
+## 涉及表名
+`dwd_jordass_player_matchrecord_hi`, `dim_jordass_imode_leyuan_nf`
+## 提示信息
+玩法次留：每天参与玩法的用户在第2天也参与了该玩法
+日均次留：每种玩法周期内次留人数的平均值
+## 失败案例参考
+以下案例曾出现过错误，请避免类似问题：
+### 失败案例 1
+- **SQL ID**: `sql_54`
+- **来源**: CKPT `V7.1_22.09_1108`
+
+**错误SQL:**
+
+```sql
+SELECT matchmode, COUNT(DISTINCT vplayerid) as player_count, SUBSTR(dteventtime, 1, 10) as event_date FROM dwd_jordass_player_matchrecord_hi WHERE matchmode = 1003 AND dteventtime >= '2024-09-01' AND dteventtime < '2024-10-01' GROUP BY matchmode, event_date ORDER BY event_date
+```
+
+> **错误原因**: 结果与预期不匹配

@@ -1,7 +1,0 @@
-[用户问题]: 统计20230712以来，历史累计活跃30天以上，但3月12日及以后未活跃过的用户且剔除掉历史充值 1500 元以上的用户后的玩家wxid
-输出：玩家wxid
-时间统计范围:20230712-20250612  
-[涉及表名]: ['dim_mgamejp_tbplayerid2wxid_nf', 'dws_argothek_oss_portaltransaction_di', 'dim_mgamejp_idconversion_wxid_qq_nf', 'dws_argothek_oss_login_di', 'dim_mgamejp_tbplayerid2qq_nf'] 
-[提示]: 历史充值1500以上的用户：
-sum(ftranamt)/100 > 1500
-限制sappid in ("qq","wx")

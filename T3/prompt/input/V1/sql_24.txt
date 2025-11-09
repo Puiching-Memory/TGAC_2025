@@ -1,0 +1,77 @@
+你是一个StarRocks数据库专家，擅长根据业务需求编写准确、高效的SQL查询语句。
+
+# SQL生成任务
+## 用户问题
+统计下列英雄和对应上线日期，新英雄上线首周的持续选择情况。限定除自定义模式，新手、训练场外所有模式
+输出：英雄id、首周选择新英雄次数超过3次的玩家、首周选择新英雄次数超过10次的玩家、首周选择过新英雄的玩家、超过3次的玩家占比、超过10次的玩家占比
+
+
+## 涉及表名
+`dwd_argothek_playermatchdetail_hi`
+## 提示信息
+英雄筛选逻辑：
+英雄1上线日期：2023/07/26
+英雄2上线日期：2023/11/01
+英雄3上线日期：2024/03/27
+英雄4上线日期：2024/08/29
+英雄5上线日期：2025/01/09
+英雄6上线日期：2025/03/06
+英雄1对应id:"e370fa57-4757-3604-3648-499e1f642d3f","cc8b64c8-4b25-4ff9-6e7f-37b4da43d235"
+英雄2对应id:"0e38b510-41a8-5780-5e8f-568b2a4f2d6c"
+英雄3对应id:"1dbf2edd-4729-0984-3115-daa5eed44993"
+英雄4对应id:"efba5359-4016-a1e5-7626-b1ae76895940"
+英雄5对应id:"b444168c-4e35-8076-db47-ef9bf368f384"
+英雄6对应id:"df1cb487-4902-002e-5c17-d28e83e78588"
+对局筛选逻辑：
+provisioningflowid = "Matchmaking" -- 除自定义模式、新手、训练场外所有模式
+## 失败案例参考
+以下案例曾出现过错误，请避免类似问题：
+### 失败案例 1
+- **SQL ID**: `sql_24`
+- **来源**: CKPT `V7.1_22.09_1108`
+
+**错误SQL:**
+
+```sql
+WITH hero_launch AS (
+  SELECT 'e370fa57-4757-3604-3648-499e1f642d3f' AS characterid, '2023-07-26' AS launch_date
+  UNION ALL
+  SELECT 'cc8b64c8-4b25-4ff9-6e7f-37b4da43d235', '2023-07-26'
+  UNION ALL
+  SELECT '0e38b510-41a8-5780-5e8f-568b2a4f2d6c', '2023-11-01'
+  UNION ALL
+  SELECT '1dbf2edd-4729-0984-3115-daa5eed44993', '2024-03-27'
+  UNION ALL
+  SELECT 'efba5359-4016-a1e5-7626-b1ae76895940', '2024-08-29'
+  UNION ALL
+  SELECT 'b444168c-4e35-8076-db47-ef9bf368f384', '2025-01-09'
+  UNION ALL
+  SELECT 'df1cb487-4902-002e-5c17-d28e83e78588', '2025-03-06'
+),
+filtered_matches AS (
+  SELECT p.characterid, p.subject, p.dteventtime
+  FROM dwd_argothek_playermatchdetail_hi p
+  INNER JOIN hero_launch h ON p.characterid = h.characterid
+  WHERE p.provisioningflowid = 'Matchmaking'
+    AND p.dteventtime >= h.launch_date
+    AND p.dteventtime < DATE_ADD(h.launch_date, INTERVAL 7 DAY)
+)
+SELECT 
+  characterid,
+  COUNT(CASE WHEN play_count > 3 THEN 1 END) AS players_over_3,
+  COUNT(CASE WHEN play_count > 10 THEN 1 END) AS players_over_10,
+  COUNT(*) AS players_total,
+  ROUND(COUNT(CASE WHEN play_count > 3 THEN 1 END) * 100.0 / COUNT(*), 2) AS pct_over_3,
+  ROUND(COUNT(CASE WHEN play_count > 10 THEN 1 END) * 100.0 / COUNT(*), 2) AS pct_over_10
+FROM (
+  SELECT 
+    characterid, 
+    subject, 
+    COUNT(*) AS play_count
+  FROM filtered_matches
+  GROUP BY characterid, subject
+) t
+GROUP BY characterid;
+```
+
+> **错误原因**: 结果与预期不匹配

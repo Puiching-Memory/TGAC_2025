@@ -1,0 +1,83 @@
+你是一个StarRocks数据库专家，擅长根据业务需求编写准确、高效的SQL查询语句。
+
+# SQL生成任务
+## 用户问题
+统计2025年1月勇者盟约端游活跃玩家交叉峡谷端游及手游活跃玩家
+输出：玩家gplayerid
+## 涉及表名
+`dws_argothek_oss_login_di`, `dim_argothek_gplayerid2qqwxid_df`, `dws_mgamejp_login_user_activity_di`
+## 提示信息
+峡谷筛选逻辑:
+sgamecode = "initiatived" -- 筛选峡谷游戏
+and saccounttype = "-100" -- 账号体系，取-100表示汇总
+and suseridtype in ("qq", "wxid") -- 账号类型，取qq或wxid
+and splattype in ("-100", "PC") -- 峡谷手游玩家及PC端玩家
+and splat = "-100" -- 写死为-100
+## 成功案例参考
+以下案例执行成功，可作为参考：
+### 成功案例 1
+- **SQL ID**: `sql_3`
+- **得分**: 1
+- **来源**: CKPT `V6_31.40_1105`
+
+**SQL:**
+
+```sql
+SELECT DISTINCT b.iuserid as gplayerid
+FROM dws_argothek_oss_login_di a
+JOIN dim_argothek_gplayerid2qqwxid_df b ON a.iuserid = b.iuserid
+JOIN dws_mgamejp_login_user_activity_di c ON b.suserid = c.suserid
+WHERE a.statis_date >= 20250101 AND a.statis_date <= 20250131
+  AND c.sgamecode = 'initiatived'
+  AND c.saccounttype = '-100'
+  AND c.suseridtype IN ('qq', 'wxid')
+  AND c.splattype IN ('-100', 'PC')
+  AND c.splat = '-100'
+  AND c.dtstatdate >= 20250101 AND c.dtstatdate <= 20250131
+```
+---
+### 成功案例 2
+- **SQL ID**: `sql_3`
+- **得分**: 1
+- **来源**: CKPT `V6.2_33.72_1109`
+
+**SQL:**
+
+```sql
+SELECT DISTINCT b.iuserid as gplayerid
+FROM dws_argothek_oss_login_di a
+JOIN dim_argothek_gplayerid2qqwxid_df b ON a.iuserid = b.iuserid
+JOIN dws_mgamejp_login_user_activity_di c ON b.suserid = c.suserid
+WHERE a.statis_date >= 20250101 AND a.statis_date <= 20250131
+  AND c.sgamecode = 'initiatived'
+  AND c.saccounttype = '-100'
+  AND c.suseridtype IN ('qq', 'wxid')
+  AND c.splattype IN ('-100', 'PC')
+  AND c.splat = '-100'
+  AND c.dtstatdate >= 20250101 AND c.dtstatdate <= 20250131
+```
+## 失败案例参考
+以下案例曾出现过错误，请避免类似问题：
+### 失败案例 1
+- **SQL ID**: `sql_3`
+- **来源**: CKPT `V7.1_22.09_1108`
+
+**错误SQL:**
+
+```sql
+SELECT /*+ SET_VAR(query_timeout=3600) */ DISTINCT t1.suserid AS gplayerid
+FROM dim_argothek_gplayerid2qqwxid_df t1
+INNER JOIN dws_argothek_oss_login_di t2 
+  ON t1.iuserid = t2.iuserid
+INNER JOIN dws_mgamejp_login_user_activity_di t3 
+  ON t1.suserid = t3.suserid
+WHERE t2.statis_date BETWEEN 20250101 AND 20250131
+  AND t3.dtstatdate BETWEEN 20250101 AND 20250131
+  AND t3.sgamecode = 'initiatived'
+  AND t3.saccounttype = '-100'
+  AND t3.suseridtype IN ('qq', 'wxid')
+  AND t3.splattype IN ('-100', 'PC')
+  AND t3.splat = '-100';
+```
+
+> **错误原因**: 结果与预期不匹配

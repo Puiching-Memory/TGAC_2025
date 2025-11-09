@@ -1,0 +1,103 @@
+你是一个StarRocks数据库专家，擅长根据业务需求编写准确、高效的SQL查询语句。
+
+# SQL生成任务
+## 用户问题
+统计2025.07.24的手游全量用户且标签为其他，在竞品业务下2025.05.30-2025.07.24的在线时长。
+输出：suserid、sgamecode、ionlinetime
+
+
+## 涉及表名
+`dws_mgamejp_login_user_activity_di`, `dim_vplayerid_vies_df`
+## 提示信息
+竞品业务：
+sgamecode in ("initiatived","jordass","esports","allianceforce","strategy","playzone","su")
+saccounttype = "-100" -- 账号体系，取-100表示汇总
+and suseridtype in ("qq","wxid") -- 用户类型
+and splattype = "-100" -- 平台类型
+and splat = "-100" -- 平台，写死为-100
+## 成功案例参考
+以下案例执行成功，可作为参考：
+### 成功案例 1
+- **SQL ID**: `sql_1`
+- **得分**: 1
+- **来源**: CKPT `V7.1_22.09_1108`
+
+**SQL:**
+
+```sql
+SELECT /*+ SET_VAR(query_timeout=300) */ a.suserid, a.sgamecode, SUM(a.ionlinetime) as total_ionlinetime
+FROM dws_mgamejp_login_user_activity_di a
+JOIN dim_vplayerid_vies_df b ON a.suserid = b.suserid AND b.dtstatdate = '20250724'
+WHERE a.dtstatdate BETWEEN 20250530 AND 20250724
+  AND b.itag = '其他'
+  AND a.sgamecode IN ('initiatived','jordass','esports','allianceforce','strategy','playzone','su')
+  AND a.saccounttype = '-100'
+  AND a.suseridtype IN ('qq','wxid')
+  AND a.splattype = '-100'
+  AND a.splat = '-100'
+GROUP BY a.suserid, a.sgamecode
+ORDER BY a.suserid, a.sgamecode;
+```
+---
+### 成功案例 2
+- **SQL ID**: `sql_1`
+- **得分**: 1
+- **来源**: CKPT `V6_31.40_1105`
+
+**SQL:**
+
+```sql
+SELECT 
+    a.suserid,
+    a.sgamecode,
+    SUM(a.ionlinetime) as ionlinetime
+FROM dws_mgamejp_login_user_activity_di a
+JOIN dim_vplayerid_vies_df b ON a.suserid = b.suserid
+WHERE a.dtstatdate >= 20250530 
+    AND a.dtstatdate <= 20250724
+    AND b.dtstatdate = '20250724'
+    AND b.itag = '其他'
+    AND a.sgamecode IN ('initiatived','jordass','esports','allianceforce','strategy','playzone','su')
+    AND a.saccounttype = '-100'
+    AND a.suseridtype IN ('qq','wxid')
+    AND a.splattype = '-100'
+    AND a.splat = '-100'
+GROUP BY a.suserid, a.sgamecode
+```
+## 失败案例参考
+以下案例曾出现过错误，请避免类似问题：
+### 失败案例 1
+- **SQL ID**: `sql_1`
+- **来源**: CKPT `V5_20.93_1104`
+
+**错误SQL:**
+
+```sql
+SELECT
+    a.suserid,
+    a.sgamecode,
+    SUM(a.ionlinetime) AS ionlinetime
+FROM
+    dws_mgamejp_login_user_activity_di a
+INNER JOIN
+    dim_vplayerid_vies_df b
+    ON a.suserid = b.suserid
+    AND a.suseridtype = b.suserid_type
+WHERE
+    -- 限定竞品业务范围
+    a.sgamecode IN ('initiatived', 'jordass', 'esports', 'allianceforce', 'strategy', 'playzone', 'su')
+    AND a.saccounttype = '-100'
+    AND a.suseridtype IN ('qq', 'wxid')
+    AND a.splattype = '-100'
+    AND a.splat = '-100'
+    -- 限定统计日期范围：2025.05.30 - 2025.07.24
+    AND a.dtstatdate BETWEEN 20250530 AND 20250724
+    -- 限定用户为2025.07.24的全量手游用户且标签为'其他'
+    AND b.dtstatdate = '20250724'
+    AND b.itag = '其他'
+GROUP BY
+    a.suserid,
+    a.sgamecode;
+```
+
+> **错误原因**: 结果与预期不匹配

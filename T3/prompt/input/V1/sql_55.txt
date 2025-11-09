@@ -1,0 +1,76 @@
+你是一个StarRocks数据库专家，擅长根据业务需求编写准确、高效的SQL查询语句。
+
+# SQL生成任务
+## 用户问题
+统计：2024.11.1-11.30，乐园当天往前上线180天以内的子玩法，按七天平均 参与率+次留+七留 算一个总排名，需要每天都提供一个榜单
+
+输出，统计日期、乐园各玩法名、平均参与率排名、次留排名、七留排名、总排名
+## 涉及表名
+`dws_jordass_matchlog_stat_di`, `dws_jordass_login_di`, `dim_jordass_submodeonline_nf`
+## 提示信息
+7天平均参与率：当天参与人数/当天活跃人,七日内平均
+7天平均次留：当天参与且第二天也参与人数/当天参与人数,七日内平均
+7天平均七留：当天参与且第7天也参与人数/当天参与人数,七日内平均
+每个玩法在每天都有一个前七天的平均参与率、次留、七留的数值，先需要按照这三个数值排名，然后按照排名总和再order一下，比如说11.1号，玩法A在前七天也就是10.25-10.31具有前七天的平均参与和次留七留，其中参与率在同期所有玩法里排名第一，次留第三，七留第四，那总排名就是1+3+4=8，玩法B相同排名总和是10，玩法C相同排名总和是2，那整体排名就是C=2>A=8>B=10
+## 失败案例参考
+以下案例曾出现过错误，请避免类似问题：
+### 失败案例 1
+- **SQL ID**: `sql_55`
+- **来源**: CKPT `V7.1_22.09_1108`
+
+**错误SQL:**
+
+```sql
+-- 查看 base_data 中是否有数据
+WITH
+active_users AS (
+  SELECT 
+    dtstatdate,
+    COUNT(DISTINCT vplayerid) AS dau
+  FROM dws_jordass_login_di
+  WHERE dtstatdate BETWEEN '20241025' AND '20241130'
+  GROUP BY dtstatdate
+),
+participation_rate AS (
+  SELECT 
+    m.dtstatdate,
+    CAST(m.imode AS VARCHAR) AS imode,
+    COUNT(DISTINCT m.vplayerid) AS participant_count,
+    a.dau,
+    CAST(COUNT(DISTINCT m.vplayerid) AS DOUBLE) / a.dau AS participation_ratio
+  FROM dws_jordass_matchlog_stat_di m
+  JOIN active_users a ON m.dtstatdate = a.dtstatdate
+  WHERE m.dtstatdate BETWEEN '20241025' AND '20241130'
+  GROUP BY m.dtstatdate, m.imode, a.dau
+),
+retention_rates AS (
+  SELECT 
+    '20241101' AS dtstatdate, 
+    '1344338933661592832' AS imode, 
+    0.8 AS next_day_ratio, 
+    0.6 AS seven_day_ratio
+  FROM dual
+),
+submode_info AS (
+  SELECT 
+    CAST(matchsubmodegroup AS VARCHAR) AS matchsubmodegroup,
+    matchsubmodegroupname,
+    onlinedate
+  FROM dim_jordass_submodeonline_nf
+)
+SELECT 
+  pr.dtstatdate,
+  pr.imode,
+  sm.matchsubmodegroupname,
+  sm.onlinedate,
+  pr.participation_ratio,
+  rr.next_day_ratio,
+  rr.seven_day_ratio
+FROM participation_rate pr
+JOIN retention_rates rr ON pr.dtstatdate = rr.dtstatdate AND pr.imode = rr.imode
+JOIN submode_info sm ON pr.imode = sm.matchsubmodegroup
+WHERE pr.dtstatdate = '20241101'
+  AND STR_TO_DATE(sm.onlinedate, '%Y%m%d') >= DATE_SUB(STR_TO_DATE(pr.dtstatdate, '%Y%m%d'), INTERVAL 180 DAY);
+```
+
+> **错误原因**: 结果与预期不匹配

@@ -1,7 +1,0 @@
-[用户问题]: 统计20250217-20250318协作平台活跃但是没有在协作玩法活跃用户的主玩玩法分布
-输出：主玩玩法（传统模式、休闲模式、...、生存模式）、人数  
-[涉及表名]: ['dws_jordass_matchlog_stat_di', 'dwd_jordass_buttonpress_pre_di', 'dws_jordass_mode_roundrecord_di'] 
-[提示]: 主玩定义：用户累计对局时长最多的玩法；
-玩法取 modename in ('传统模式','休闲模式','组队竞技','领地','乐园','广阔天地','创意创作间','生存模式')
-协作平台活跃：ugcmbuttonclick中的玩家；
-协作玩法活跃：vtemp1='协作'  的玩法记录

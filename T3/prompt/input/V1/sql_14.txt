@@ -1,0 +1,67 @@
+你是一个StarRocks数据库专家，擅长根据业务需求编写准确、高效的SQL查询语句。
+
+# SQL生成任务
+## 用户问题
+统计2025年5月份活跃但2025年6月未活跃的qq号码包
+输出:用户suserid
+## 涉及表名
+`dws_argothek_oss_login_di`, `dim_argothek_gplayerid2qqwxid_df`
+## 提示信息
+限定dim_argothek_gplayerid2qqwxid_df的日期为"20250610"
+## 成功案例参考
+以下案例执行成功，可作为参考：
+### 成功案例 1
+- **SQL ID**: `sql_14`
+- **得分**: 1
+- **来源**: CKPT `V7.1_22.09_1108`
+
+**SQL:**
+
+```sql
+SELECT DISTINCT t1.suserid
+FROM dim_argothek_gplayerid2qqwxid_df t1
+INNER JOIN dws_argothek_oss_login_di t2
+ON t1.iuserid = t2.iuserid
+WHERE t1.swxid_type = 'qq'
+  AND t1.dtstatdate = '20250610'
+  AND t2.statis_date BETWEEN 20250501 AND 20250531
+  AND NOT EXISTS (
+    SELECT 1
+    FROM dws_argothek_oss_login_di t3
+    WHERE t3.iuserid = t2.iuserid
+      AND t3.statis_date BETWEEN 20250601 AND 20250630
+  );
+```
+---
+### 成功案例 2
+- **SQL ID**: `sql_14`
+- **得分**: 1
+- **来源**: CKPT `V6_31.40_1105`
+
+**SQL:**
+
+```sql
+WITH may_active_users AS (
+  SELECT DISTINCT l.iuserid
+  FROM dws_argothek_oss_login_di l
+  WHERE l.statis_date >= 20250501 AND l.statis_date <= 20250531
+),
+
+june_active_users AS (
+  SELECT DISTINCT l.iuserid
+  FROM dws_argothek_oss_login_di l
+  WHERE l.statis_date >= 20250601 AND l.statis_date <= 20250630
+),
+
+may_but_not_june_users AS (
+  SELECT ma.iuserid
+  FROM may_active_users ma
+  LEFT JOIN june_active_users ja ON ma.iuserid = ja.iuserid
+  WHERE ja.iuserid IS NULL
+)
+
+SELECT DISTINCT d.suserid
+FROM may_but_not_june_users mu
+JOIN dim_argothek_gplayerid2qqwxid_df d ON mu.iuserid = d.iuserid
+WHERE d.dtstatdate = '20250610'
+```

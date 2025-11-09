@@ -1,0 +1,174 @@
+你是一个StarRocks数据库专家，擅长根据业务需求编写准确、高效的SQL查询语句。
+
+# SQL生成任务
+## 用户问题
+统计2023.07.02和2023.07.09 参与乐园各子玩法的用户里，砺刃新进、回流、留存用户数
+注：新进，回流，留存都按照7天为一个周期来计算
+输出：统计日期（YYYYMMDD），玩法，类型（新进、回流、留存），人数
+## 涉及表名
+`dws_jordass_login_df`, `dim_jordass_leyuan_participate_cdf_nf`
+## 提示信息
+乐园玩法子用户筛选条件：
+instr(substr(cbitmap,1,7),'1')>0
+回流与留存计算：
+case when datediff(dtstatdate,dregdate)<=6 then '新进'
+when instr(substr(cbitmap,8,7),'1')>0 then '留存'
+when instr(substr(cbitmap,8,7),'1')=0 then '回流'
+注意只需要统计上述三种类型
+## 成功案例参考
+以下案例执行成功，可作为参考：
+### 成功案例 1
+- **SQL ID**: `sql_87`
+- **得分**: 1
+- **来源**: CKPT `V6_31.40_1105`
+
+**SQL:**
+
+```sql
+with target_dates as (
+  select '20230702' as dtstatdate
+  union all
+  select '20230709'
+),
+-- 获取目标日期参与乐园子玩法的用户
+leyuan_users as (
+  select 
+    t.dtstatdate,
+    l.matchsubmodegroup,
+    l.vplayerid,
+    l.dregdate as first_participate_date
+  from target_dates t
+  join dim_jordass_leyuan_participate_cdf_nf l
+    on t.dtstatdate = l.dtstatdate
+  where instr(substr(l.cbitmap, 1, 7), '1') > 0  -- 过去7天内有参与该子玩法
+),
+-- 关联登录表获取注册日期和登录位图（用于判断新进/回流/留存）
+user_login_info as (
+  select 
+    lu.dtstatdate,
+    lu.matchsubmodegroup,
+    lu.vplayerid,
+    lu.first_participate_date,
+    log.dregdate as register_date,
+    log.cbitmap as login_bitmap
+  from leyuan_users lu
+  join dws_jordass_login_df log
+    on lu.vplayerid = log.vplayerid
+    and lu.dtstatdate = log.dtstatdate
+    and log.platid = 255
+),
+-- 判断用户类型
+user_type_classified as (
+  select
+    dtstatdate,
+    matchsubmodegroup,
+    vplayerid,
+    case 
+      when datediff(cast(dtstatdate as date), cast(register_date as date)) <= 6 then '新进'
+      when instr(substr(login_bitmap, 8, 7), '1') > 0 then '留存'
+      when instr(substr(login_bitmap, 8, 7), '1') = 0 then '回流'
+      else null
+    end as user_type
+  from user_login_info
+)
+select
+  dtstatdate,
+  matchsubmodegroup as play_mode,
+  user_type,
+  count(distinct vplayerid) as user_count
+from user_type_classified
+where user_type in ('新进', '回流', '留存')
+group by dtstatdate, matchsubmodegroup, user_type
+order by dtstatdate, matchsubmodegroup, user_type;
+```
+---
+### 成功案例 2
+- **SQL ID**: `sql_87`
+- **得分**: 1
+- **来源**: CKPT `V6.2_33.72_1109`
+
+**SQL:**
+
+```sql
+with target_dates as (
+  select '20230702' as dtstatdate
+  union all
+  select '20230709'
+),
+-- 获取目标日期参与乐园子玩法的用户
+leyuan_users as (
+  select 
+    t.dtstatdate,
+    l.matchsubmodegroup,
+    l.vplayerid,
+    l.dregdate as first_participate_date
+  from target_dates t
+  join dim_jordass_leyuan_participate_cdf_nf l
+    on t.dtstatdate = l.dtstatdate
+  where instr(substr(l.cbitmap, 1, 7), '1') > 0  -- 过去7天内有参与该子玩法
+),
+-- 关联登录表获取注册日期和登录位图（用于判断新进/回流/留存）
+user_login_info as (
+  select 
+    lu.dtstatdate,
+    lu.matchsubmodegroup,
+    lu.vplayerid,
+    lu.first_participate_date,
+    log.dregdate as register_date,
+    log.cbitmap as login_bitmap
+  from leyuan_users lu
+  join dws_jordass_login_df log
+    on lu.vplayerid = log.vplayerid
+    and lu.dtstatdate = log.dtstatdate
+    and log.platid = 255
+),
+-- 判断用户类型
+user_type_classified as (
+  select
+    dtstatdate,
+    matchsubmodegroup,
+    vplayerid,
+    case 
+      when datediff(cast(dtstatdate as date), cast(register_date as date)) <= 6 then '新进'
+      when instr(substr(login_bitmap, 8, 7), '1') > 0 then '留存'
+      when instr(substr(login_bitmap, 8, 7), '1') = 0 then '回流'
+      else null
+    end as user_type
+  from user_login_info
+)
+select
+  dtstatdate,
+  matchsubmodegroup as play_mode,
+  user_type,
+  count(distinct vplayerid) as user_count
+from user_type_classified
+where user_type in ('新进', '回流', '留存')
+group by dtstatdate, matchsubmodegroup, user_type
+order by dtstatdate, matchsubmodegroup, user_type;
+```
+## 失败案例参考
+以下案例曾出现过错误，请避免类似问题：
+### 失败案例 1
+- **SQL ID**: `sql_87`
+- **来源**: CKPT `V7.1_22.09_1108`
+
+**错误SQL:**
+
+```sql
+SELECT 
+    dtstatdate,
+    matchsubmodegroup AS play_mode,
+    CASE 
+        WHEN DATEDIFF(dtstatdate, dregdate) <= 6 THEN '新进'
+        WHEN INSTR(SUBSTR(cbitmap, 8, 7), '1') > 0 THEN '留存'
+        ELSE '回流'
+    END AS user_type,
+    COUNT(DISTINCT vplayerid) AS user_count
+FROM dim_jordass_leyuan_participate_cdf_nf
+WHERE dtstatdate IN ('20230702', '20230709')
+    AND INSTR(SUBSTR(cbitmap, 1, 7), '1') > 0
+GROUP BY dtstatdate, matchsubmodegroup, user_type
+ORDER BY dtstatdate, play_mode, user_type
+```
+
+> **错误原因**: 结果与预期不匹配

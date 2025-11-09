@@ -1,0 +1,159 @@
+你是一个StarRocks数据库专家，擅长根据业务需求编写准确、高效的SQL查询语句。
+
+# SQL生成任务
+## 用户问题
+统计20230712以来，历史累计活跃30天以上，但3月12日及以后未活跃过的用户且剔除掉历史充值 1500 元以上的用户后的玩家wxid
+输出：玩家wxid
+时间统计范围:20230712-20250612
+## 涉及表名
+`dim_mgamejp_tbplayerid2wxid_nf`, `dws_argothek_oss_portaltransaction_di`, `dim_mgamejp_idconversion_wxid_qq_nf`, `dws_argothek_oss_login_di`, `dim_mgamejp_tbplayerid2qq_nf`
+## 提示信息
+历史充值1500以上的用户：
+sum(ftranamt)/100 > 1500
+限制sappid in ("qq","wx")
+## 成功案例参考
+以下案例执行成功，可作为参考：
+### 成功案例 1
+- **SQL ID**: `sql_13`
+- **得分**: 1
+- **来源**: CKPT `V6_31.40_1105`
+
+**SQL:**
+
+```sql
+WITH active_users AS (
+  SELECT
+    iuserid,
+    COUNT(DISTINCT statis_date) AS active_days
+  FROM
+    dws_argothek_oss_login_di
+  WHERE
+    statis_date BETWEEN 20230712 AND 20250612
+  GROUP BY
+    iuserid
+  HAVING
+    active_days > 30
+),
+inactive_recent AS (
+  SELECT DISTINCT iuserid
+  FROM dws_argothek_oss_login_di
+  WHERE statis_date >= 20250312
+),
+high_payers AS (
+  SELECT
+    iuserid
+  FROM
+    dws_argothek_oss_portaltransaction_di
+  WHERE
+    vusertype IN ('wx', 'qq')
+  GROUP BY
+    iuserid
+  HAVING
+    SUM(ftranamt) / 100.0 > 1500
+),
+target_users AS (
+  SELECT
+    au.iuserid
+  FROM
+    active_users au
+  LEFT JOIN inactive_recent ir ON au.iuserid = ir.iuserid
+  LEFT JOIN high_payers hp ON au.iuserid = hp.iuserid
+  WHERE
+    ir.iuserid IS NULL
+    AND hp.iuserid IS NULL
+)
+SELECT DISTINCT
+  COALESCE(w.swxid, qq_conv.swxid) AS wxid
+FROM
+  target_users tu
+  LEFT JOIN dim_mgamejp_tbplayerid2wxid_nf w
+    ON tu.iuserid = w.splayerid
+    AND w.dtstatdate BETWEEN 20230712 AND 20250612
+  LEFT JOIN dim_mgamejp_tbplayerid2qq_nf qq
+    ON tu.iuserid = qq.splayerid
+    AND qq.dtstatdate BETWEEN 20230712 AND 20250612
+  LEFT JOIN dim_mgamejp_idconversion_wxid_qq_nf qq_conv
+    ON qq.iqq = qq_conv.iqq
+    AND qq_conv.dtstatdate BETWEEN 20230712 AND 20250612
+WHERE
+  COALESCE(w.swxid, qq_conv.swxid) IS NOT NULL;
+```
+---
+### 成功案例 2
+- **SQL ID**: `sql_13`
+- **得分**: 1
+- **来源**: CKPT `V6.2_33.72_1109`
+
+**SQL:**
+
+```sql
+WITH active_users AS (
+  SELECT
+    iuserid,
+    COUNT(DISTINCT statis_date) AS active_days
+  FROM
+    dws_argothek_oss_login_di
+  WHERE
+    statis_date BETWEEN 20230712 AND 20250612
+  GROUP BY
+    iuserid
+  HAVING
+    active_days > 30
+),
+inactive_recent AS (
+  SELECT DISTINCT iuserid
+  FROM dws_argothek_oss_login_di
+  WHERE statis_date >= 20250312
+),
+high_payers AS (
+  SELECT
+    iuserid
+  FROM
+    dws_argothek_oss_portaltransaction_di
+  WHERE
+    vusertype IN ('wx', 'qq')
+  GROUP BY
+    iuserid
+  HAVING
+    SUM(ftranamt) / 100.0 > 1500
+),
+target_users AS (
+  SELECT
+    au.iuserid
+  FROM
+    active_users au
+  LEFT JOIN inactive_recent ir ON au.iuserid = ir.iuserid
+  LEFT JOIN high_payers hp ON au.iuserid = hp.iuserid
+  WHERE
+    ir.iuserid IS NULL
+    AND hp.iuserid IS NULL
+)
+SELECT DISTINCT
+  COALESCE(w.swxid, qq_conv.swxid) AS wxid
+FROM
+  target_users tu
+  LEFT JOIN dim_mgamejp_tbplayerid2wxid_nf w
+    ON tu.iuserid = w.splayerid
+    AND w.dtstatdate BETWEEN 20230712 AND 20250612
+  LEFT JOIN dim_mgamejp_tbplayerid2qq_nf qq
+    ON tu.iuserid = qq.splayerid
+    AND qq.dtstatdate BETWEEN 20230712 AND 20250612
+  LEFT JOIN dim_mgamejp_idconversion_wxid_qq_nf qq_conv
+    ON qq.iqq = qq_conv.iqq
+    AND qq_conv.dtstatdate BETWEEN 20230712 AND 20250612
+WHERE
+  COALESCE(w.swxid, qq_conv.swxid) IS NOT NULL;
+```
+## 失败案例参考
+以下案例曾出现过错误，请避免类似问题：
+### 失败案例 1
+- **SQL ID**: `sql_13`
+- **来源**: CKPT `V7.1_22.09_1108`
+
+**错误SQL:**
+
+```sql
+SELECT a.iuserid FROM (SELECT iuserid, COUNT(DISTINCT statis_date) as active_days FROM dws_argothek_oss_login_di WHERE statis_date >= 20230712 GROUP BY iuserid HAVING active_days > 30) a LEFT ANTI JOIN (SELECT DISTINCT iuserid FROM dws_argothek_oss_login_di WHERE statis_date >= 20240312) b ON a.iuserid = b.iuserid INNER JOIN (SELECT iuserid FROM dws_argothek_oss_portaltransaction_di WHERE vusertype IN ('wx', 'qq') GROUP BY iuserid HAVING SUM(ftranamt)/100 <= 1500) c ON a.iuserid = c.iuserid
+```
+
+> **错误原因**: 结果与预期不匹配

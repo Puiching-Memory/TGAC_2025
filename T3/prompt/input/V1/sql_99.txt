@@ -1,0 +1,24 @@
+你是一个StarRocks数据库专家，擅长根据业务需求编写准确、高效的SQL查询语句。
+
+# SQL生成任务
+## 用户问题
+统计2024.6.1-2024.6.30期间乐园付费用户的砺刃和乐园付费分布,需要看不同乐园子玩法
+付费分层（小R 1-30，中小R 30-100，中R 100-500，大R 500-1500，超R 1500+，否则为未付费），乐园付费金额sum(Amount/10)
+输出：子玩法、分类（砺刃or乐园），付费分层，人数
+## 涉及表名
+`dwd_jordass_payrespond_hi`
+## 提示信息
+res = 'ok'
+## 失败案例参考
+以下案例曾出现过错误，请避免类似问题：
+### 失败案例 1
+- **SQL ID**: `sql_99`
+- **来源**: CKPT `V7.1_22.09_1108`
+
+**错误SQL:**
+
+```sql
+SELECT submode, category, CASE WHEN total_amount BETWEEN 1 AND 30 THEN '小R' WHEN total_amount > 30 AND total_amount <= 100 THEN '中小R' WHEN total_amount > 100 AND total_amount <= 500 THEN '中R' WHEN total_amount > 500 AND total_amount <= 1500 THEN '大R' WHEN total_amount > 1500 THEN '超R' ELSE '未付费' END AS payer_tier, COUNT(*) AS user_count FROM (SELECT CASE WHEN submode IS NOT NULL THEN 'LeYuan' ELSE 'Liren' END AS category, COALESCE(submode, 'main_game') AS submode, vplayerid, SUM(amount / 10) AS total_amount FROM dwd_jordass_payrespond_hi WHERE tdbank_imp_date BETWEEN '2024060100' AND '2024063000' AND res = 'ok' GROUP BY category, submode, vplayerid) t GROUP BY submode, category, payer_tier ORDER BY submode, category, FIELD(payer_tier, '未付费', '小R', '中小R', '中R', '大R', '超R')
+```
+
+> **错误原因**: 结果与预期不匹配

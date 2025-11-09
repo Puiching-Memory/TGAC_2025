@@ -1,8 +1,0 @@
-[用户问题]: 统计20240426-20240505期间活动为1193536的曝光情况
-曝光：itype='1'
-参与：itype in ('10','200','201','202','203','204','31','32','33','34','35','702','703')
-输出：曝光参与情况（曝光未参与，曝光且参与）,人数，传统模式人数，传统模式对局数，传统模式对局时长，活跃人数，活跃时长，专业赛人数，专业赛局数（按照记录数）  
-[涉及表名]: ['dws_jordass_mode_roundrecord_di', 'dws_jordass_login_di', 'dwd_jordass_playerprofstagechange_hi', 'dwd_jordass_mysteryplaylog_hi'] 
-[提示]: 注意将曝光未参与中无记录的null值统一转化为0
-用户过滤条件：platid=255
-赛事id：TournamentID = 30002

@@ -1,9 +1,0 @@
-[用户问题]: 统计用户（2025.7月24~7月25日持续活跃，2025.7.24活跃7.25流失到盘外），且帐号体系为qq的性别人数
-输出：用户类型（7月24~7月25日持续活跃，7.24活跃7.25流失到盘外）,性别,人数  
-[涉及表名]: ['dws_mgamejp_login_user_activity_di', 'dws_jordass_login_df', 'dim_mgamejp_tbplayerid2qq_nf', 'dws_jordass_uid_login_df'] 
-[提示]: n流失盘外：
-WHERE dtstatdate='20250725' 
-           AND platid = 255 
-           AND substr(cbitmap,1,2)='01')
-需要将vplayerid转化为qq，体系转化用到字段：iqq, splayerid
-用户在盘内数据：dtstatdate='20250725' AND saccounttype='-100' AND sgamecode='-100' AND splattype='-100' AND splat='-100'

@@ -1,0 +1,40 @@
+你是一个StarRocks数据库专家，擅长根据业务需求编写准确、高效的SQL查询语句。
+
+# SQL生成任务
+## 用户问题
+统计20250506-20250512期间每日的指定网吧渠道内每个渠道活跃人数
+输出：日期（20250506、...、20250512）、渠道、玩家数
+其中：网吧渠道：iloginway in (1,10,11,12,35,20,28,29,30,31,32,33,34,36)
+## 涉及表名
+`dws_argothek_oss_login_di`
+## 成功案例参考
+以下案例执行成功，可作为参考：
+### 成功案例 1
+- **SQL ID**: `sql_18`
+- **得分**: 1
+- **来源**: CKPT `V7.1_22.09_1108`
+
+**SQL:**
+
+```sql
+SELECT statis_date, iloginway, COUNT(DISTINCT iuserid) AS player_count FROM dws_argothek_oss_login_di WHERE statis_date BETWEEN 20250506 AND 20250512 AND iloginway IN (1,10,11,12,35,20,28,29,30,31,32,33,34,36) GROUP BY statis_date, iloginway ORDER BY statis_date, iloginway
+```
+---
+### 成功案例 2
+- **SQL ID**: `sql_18`
+- **得分**: 1
+- **来源**: CKPT `V6_31.40_1105`
+
+**SQL:**
+
+```sql
+SELECT 
+    statis_date,
+    iloginway,
+    COUNT(DISTINCT iuserid) AS player_count
+FROM dws_argothek_oss_login_di
+WHERE statis_date BETWEEN 20250506 AND 20250512
+  AND iloginway IN (1, 10, 11, 12, 35, 20, 28, 29, 30, 31, 32, 33, 34, 36)
+GROUP BY statis_date, iloginway
+ORDER BY statis_date, iloginway
+```

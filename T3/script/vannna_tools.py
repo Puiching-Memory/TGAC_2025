@@ -1,9 +1,12 @@
 import os
+import json
+from datetime import datetime
 from uuid import uuid4
 from typing import Any, Dict, List, Optional, Set
+from pathlib import Path
 
 import chromadb
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from vanna import Agent, AgentConfig
 from vanna.core.registry import ToolRegistry
@@ -13,231 +16,242 @@ from vanna.core.user import RequestContext, User, UserResolver
 from vanna.integrations.local.agent_memory import DemoAgentMemory
 from vanna.integrations.openai import OpenAILlmService
 
-class SearchSchemaToolInput(BaseModel):
-    query: str = Field(..., description="The natural language query describing the schema info to find.")
-    n_results: int = Field(3, description="The maximum number of results to return.")
+class UnifiedSearchToolInput(BaseModel):
+    query: str = Field(..., description="The search query to find database schema information or domain knowledge.")
+    search_type: str = Field("both", description="Type of search: 'schema' for database schema only, 'domain' for domain knowledge only, 'both' to search both (default).")
+    schema_results: int = Field(3, description="Maximum number of schema results to return.")
+    domain_results: int = Field(3, description="Maximum number of domain knowledge results to return.")
 
 
-class SearchDomainKnowledgeToolInput(BaseModel):
-    query: str = Field(..., description="Natural language description of the knowledge needed.")
-    n_results: int = Field(3, description="Maximum number of knowledge snippets to return.")
+class SearchFailedCasesToolInput(BaseModel):
+    query: str = Field(..., description="The current user question or SQL problem description to find similar failed cases. Use the full question text or key phrases from the question.")
+    n_results: int = Field(2, description="Maximum number of failed cases to return (default: 2).")
 
-class SearchSchemaTool(Tool):
+
+class UnifiedSearchTool(Tool):
     """
-    A tool to search for database schema information (table structures, column descriptions, relationships)
-    from a ChromaDB vector database. Use this tool to understand the database layout, find relevant tables,
-    or get details about specific columns before generating a SQL query.
+    A unified search tool that can search both database schema information and domain knowledge.
+    This tool combines the functionality of schema search and domain knowledge search into a single interface.
     """
-    name: str = "search_schema"
+    name: str = "search"
     description: str = (
-        "Searches for and retrieves information about database tables, columns, and their relationships. "
-        "Input should be a query describing the information you are looking for, e.g., 'user login information', "
-        "'tables related to players', or 'columns in the dws_jordass_device_login_di table'."
+        "A unified search tool that searches both database schema information and domain knowledge. "
+        "Use this tool to find information about database tables, columns, relationships, or business concepts. "
+        "The tool automatically searches both schema and domain knowledge sources and returns the most relevant results. "
+        "Examples: 'user login information', 'tables related to players', '付费用户 definition', "
+        "'columns in the dws_jordass_device_login_di table', '竞品业务 meaning'."
     )
-    COLLECTION_CANDIDATES = ("schema_info", "schema_knowledge", "merged_schema_analysis")
+    
+    SCHEMA_COLLECTION_NAME = "schema_knowledge"
+    DOMAIN_COLLECTION_NAME = "domain_knowledge"
     
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.chroma_client = None
-        self.collection = None
-        self.collection_name: Optional[str] = None
-
+        self.schema_collection = None
+        self.domain_collection = None
+    
     def get_args_schema(self) -> BaseModel:
-        return SearchSchemaToolInput
-
-    def _get_collection(self):
-        """Initializes and returns the ChromaDB collection."""
-        if self.collection is None:
+        return UnifiedSearchToolInput
+    
+    def _get_schema_collection(self):
+        """Initializes and returns the ChromaDB schema_knowledge collection."""
+        if self.schema_collection is None:
             try:
-                # Go up two levels from T3/script to TGAC_2025
                 workspace_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
                 chroma_db_path = os.path.join(workspace_root, "T3", "chroma_db")
                 
-                print(f"Connecting to ChromaDB for schema search at: {chroma_db_path}")
-                self.chroma_client = chromadb.PersistentClient(path=chroma_db_path)
+                if self.chroma_client is None:
+                    print(f"[UnifiedSearchTool] Connecting to ChromaDB for schema search at: {chroma_db_path}")
+                    self.chroma_client = chromadb.PersistentClient(path=chroma_db_path)
                 
-                available_collections: List[str] = []
                 try:
-                    available_collections = [col.name for col in self.chroma_client.list_collections()]
-                except Exception:  # pylint: disable=broad-except
-                    available_collections = []
-
-                chosen_collection: Optional[str] = None
-                for candidate in self.COLLECTION_CANDIDATES:
-                    try:
-                        self.collection = self.chroma_client.get_collection(name=candidate)
-                    except Exception:  # pylint: disable=broad-except
-                        continue
-                    chosen_collection = candidate
-                    break
-
-                if self.collection is None and available_collections:
-                    fallback_name = available_collections[0]
-                    self.collection = self.chroma_client.get_collection(name=fallback_name)
-                    chosen_collection = fallback_name
+                    self.schema_collection = self.chroma_client.get_collection(name=self.SCHEMA_COLLECTION_NAME)
+                    count = self.schema_collection.count()
+                    if count > 0:
+                        print(f"[UnifiedSearchTool] Connected to schema collection '{self.SCHEMA_COLLECTION_NAME}' (contains {count} documents)")
+                    else:
+                        print(
+                            f"[UnifiedSearchTool] Warning: Schema collection '{self.SCHEMA_COLLECTION_NAME}' exists but is empty. "
+                            f"Please run 'python T3/script/ingest_schema.py' to populate it."
+                        )
+                except Exception:
+                    self.schema_collection = self.chroma_client.get_or_create_collection(name=self.SCHEMA_COLLECTION_NAME)
                     print(
-                        f"Falling back to existing ChromaDB collection '{fallback_name}' for schema search."
+                        f"[UnifiedSearchTool] Warning: Schema collection '{self.SCHEMA_COLLECTION_NAME}' not found. Created it but it is currently empty. "
+                        f"Please run 'python T3/script/ingest_schema.py' to populate it."
                     )
-
-                if self.collection is None:
-                    default_name = self.COLLECTION_CANDIDATES[0]
-                    self.collection = self.chroma_client.get_or_create_collection(name=default_name)
-                    chosen_collection = default_name
-                    print(
-                        f"Warning: No schema collection found. Created '{default_name}' but it is currently empty."
-                    )
-
-                self.collection_name = chosen_collection
-                if self.collection_name:
-                    print(f"Successfully connected to collection '{self.collection_name}'.")
-                else:
-                    print("Schema collection connection established, but collection name is unknown.")
             except Exception as e:
-                available = []
-                try:
-                    available = [col.name for col in self.chroma_client.list_collections()]
-                except Exception:  # pylint: disable=broad-except
-                    available = []
-                print(
-                    f"Error connecting to ChromaDB for schema search: {e}. Available collections: {available}"
-                )
+                print(f"[UnifiedSearchTool] Error connecting to schema collection: {e}")
+                import traceback
+                traceback.print_exc()
                 return None
-        return self.collection
-
-    async def execute(self, context: ToolContext, args: SearchSchemaToolInput) -> ToolResult:
-        """Executes a search query against the schema information in ChromaDB."""
-        collection = self._get_collection()
+        return self.schema_collection
+    
+    def _get_domain_collection(self):
+        """Initializes and returns the ChromaDB domain_knowledge collection."""
+        if self.domain_collection is None:
+            try:
+                workspace_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
+                chroma_db_path = os.path.join(workspace_root, "T3", "chroma_db")
+                
+                if self.chroma_client is None:
+                    print(f"[UnifiedSearchTool] Connecting to ChromaDB for domain knowledge search at: {chroma_db_path}")
+                    self.chroma_client = chromadb.PersistentClient(path=chroma_db_path)
+                
+                try:
+                    self.domain_collection = self.chroma_client.get_collection(name=self.DOMAIN_COLLECTION_NAME)
+                    count = self.domain_collection.count()
+                    if count > 0:
+                        print(f"[UnifiedSearchTool] Connected to domain collection '{self.DOMAIN_COLLECTION_NAME}' (contains {count} documents)")
+                    else:
+                        print(
+                            f"[UnifiedSearchTool] Warning: Domain collection '{self.DOMAIN_COLLECTION_NAME}' exists but is empty. "
+                            f"Please run 'python T3/script/ingest_common_knowledge.py' to populate it."
+                        )
+                except Exception:
+                    self.domain_collection = self.chroma_client.get_or_create_collection(name=self.DOMAIN_COLLECTION_NAME)
+                    print(
+                        f"[UnifiedSearchTool] Warning: Domain collection '{self.DOMAIN_COLLECTION_NAME}' not found. Created it but it is currently empty. "
+                        f"Please run 'python T3/script/ingest_common_knowledge.py' to populate it."
+                    )
+            except Exception as e:
+                print(f"[UnifiedSearchTool] Error connecting to domain collection: {e}")
+                import traceback
+                traceback.print_exc()
+                return None
+        return self.domain_collection
+    
+    async def _search_schema(self, query: str, n_results: int) -> Dict[str, Any]:
+        """Search schema information."""
+        collection = self._get_schema_collection()
         if collection is None:
-            message = "Error: Could not connect to the schema information database."
-            return ToolResult(
-                success=False,
-                result_for_llm=message,
-                error=message,
-                metadata={"query": args.query},
-            )
-
+            return {
+                "success": False,
+                "message": "Could not connect to schema database. Please run 'python T3/script/ingest_schema.py' first.",
+                "results": []
+            }
+        
         try:
-            print(f"Executing schema search with query: '{args.query}'")
+            # 增加返回结果数量，以便后续按类型分组和筛选
+            search_n_results = min(n_results * 3, 15)
+            
             results = collection.query(
-                query_texts=[args.query],
-                n_results=args.n_results
+                query_texts=[query],
+                n_results=search_n_results
             )
-
+            
             documents_list = results.get("documents") or [[]]
             metadatas_list = results.get("metadatas") or [[]]
             distances_list = results.get("distances") or [[]]
             ids_list = results.get("ids") or [[]]
-
+            
             documents = documents_list[0] if documents_list else []
             metadatas = metadatas_list[0] if metadatas_list else []
             distances = distances_list[0] if distances_list else []
             ids = ids_list[0] if ids_list else []
-
+            
             if not documents:
-                message = "No relevant schema information found for your query."
-                return ToolResult(
-                    success=True,
-                    result_for_llm=message,
-                    metadata={"query": args.query, "documents": [], "metadatas": []},
-                )
-
-            print(f"Found {len(documents)} relevant schema documents.")
-
-            formatted_results = []
+                return {
+                    "success": True,
+                    "message": "No relevant schema information found.",
+                    "results": []
+                }
+            
+            # 按文档类型分组和排序
+            table_results = []
+            column_results = []
+            toon_results = []
+            relationship_results = []
+            
             for idx, document in enumerate(documents):
-                header = f"Result {idx + 1}:"
                 meta = metadatas[idx] if idx < len(metadatas) else {}
                 distance = distances[idx] if idx < len(distances) else None
-                identifier = ids[idx] if idx < len(ids) else None
-                meta_info = [
-                    f"id={identifier}" if identifier else None,
-                    f"distance={distance:.4f}" if isinstance(distance, (float, int)) else None,
-                    f"metadata={meta}" if meta else None,
-                ]
-                meta_info_str = " | ".join(filter(None, meta_info))
-                if meta_info_str:
-                    formatted_results.append(f"{header}\n{meta_info_str}\n{document}")
-                else:
-                    formatted_results.append(f"{header}\n{document}")
-
-            result_text = "\n\n".join(formatted_results)
-
-            # print(f"{args.query}\n{documents}\n{metadatas}\n{distances}\n{ids}")
-
-            return ToolResult(
-                success=True,
-                result_for_llm=result_text,
-                metadata={
-                    "query": args.query,
-                    "documents": documents,
-                    "metadatas": metadatas,
-                    "distances": distances,
-                    "ids": ids,
-                },
-            )
+                doc_id = ids[idx] if idx < len(ids) else None
+                doc_type = meta.get("type", "unknown")
+                
+                result_item = {
+                    "document": document,
+                    "metadata": meta,
+                    "distance": distance,
+                    "id": doc_id,
+                }
+                
+                if doc_type == "table":
+                    table_results.append(result_item)
+                elif doc_type == "column":
+                    column_results.append(result_item)
+                elif doc_type == "table_toon":
+                    toon_results.append(result_item)
+                elif doc_type == "relationship":
+                    relationship_results.append(result_item)
+            
+            # 按距离排序
+            table_results.sort(key=lambda x: x["distance"] if x["distance"] is not None else float('inf'))
+            column_results.sort(key=lambda x: x["distance"] if x["distance"] is not None else float('inf'))
+            relationship_results.sort(key=lambda x: x["distance"] if x["distance"] is not None else float('inf'))
+            
+            # 格式化结果
+            formatted_results = []
+            result_count = 0
+            
+            # 优先返回表级结果
+            for item in table_results[:n_results]:
+                result_count += 1
+                meta = item["metadata"]
+                distance = item["distance"]
+                table_name = meta.get("table_name", "")
+                header = f"表信息 {result_count}:"
+                similarity = f"相似度: {1 - distance:.3f}" if isinstance(distance, (float, int)) else ""
+                
+                formatted_results.append(
+                    f"{header}\n"
+                    f"表名: {table_name}\n"
+                    f"{similarity}\n"
+                    f"{item['document']}"
+                )
+            
+            return {
+                "success": True,
+                "message": f"Found {len(documents)} schema documents.",
+                "results": formatted_results
+            }
         except Exception as e:
-            print(f"An error occurred during schema search: {e}")
-            message = f"An error occurred during search: {e}"
-            return ToolResult(
-                success=False,
-                result_for_llm=message,
-                error=str(e),
-                metadata={"query": args.query},
-            )
-
-
-class SearchDomainKnowledgeTool(Tool):
-    """Retrieve background domain knowledge to help interpret user questions."""
-
-    name: str = "search_domain_knowledge"
-    description: str = (
-        "Searches the curated gameplay and data-warehouse knowledge base. Use before writing SQL when you need "
-        "clarifications on terminology, metrics, or conventions mentioned by the user."
-    )
-
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-        self.collection = None
-
-    def get_args_schema(self) -> BaseModel:
-        return SearchDomainKnowledgeToolInput
-
-    def _get_collection(self):
-        if self.collection is None:
-            try:
-                workspace_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
-                chroma_db_path = os.path.join(workspace_root, "T3", "chroma_db")
-                print(f"Connecting to ChromaDB for domain knowledge at: {chroma_db_path}")
-                client = chromadb.PersistentClient(path=chroma_db_path)
-                self.collection = client.get_collection(name="domain_knowledge")
-                print("Connected to collection 'domain_knowledge'.")
-            except Exception as exc:  # pylint: disable=broad-except
-                print(f"Error connecting to ChromaDB collection 'domain_knowledge': {exc}")
-                return None
-        return self.collection
-
-    async def execute(self, context: ToolContext, args: SearchDomainKnowledgeToolInput) -> ToolResult:
-        collection = self._get_collection()
+            print(f"[UnifiedSearchTool] Error during schema search: {e}")
+            return {
+                "success": False,
+                "message": f"An error occurred during schema search: {e}",
+                "results": []
+            }
+    
+    async def _search_domain(self, query: str, n_results: int) -> Dict[str, Any]:
+        """Search domain knowledge."""
+        collection = self._get_domain_collection()
         if collection is None:
-            message = "Error: Could not connect to the domain knowledge database."
-            return ToolResult(success=False, result_for_llm=message, error=message, metadata={"query": args.query})
-
+            return {
+                "success": False,
+                "message": "Could not connect to domain knowledge database. Please run 'python T3/script/ingest_common_knowledge.py' first.",
+                "results": []
+            }
+        
         try:
-            print(f"Executing domain knowledge search with query: '{args.query}'")
-            results = collection.query(query_texts=[args.query], n_results=args.n_results)
-
+            results = collection.query(query_texts=[query], n_results=n_results)
+            
             documents_list = results.get("documents") or [[]]
             metadatas_list = results.get("metadatas") or [[]]
             distances_list = results.get("distances") or [[]]
-
+            
             documents = documents_list[0]
             metadatas = metadatas_list[0] if metadatas_list else []
             distances = distances_list[0] if distances_list else []
-
+            
             if not documents:
-                message = "No matching domain knowledge found for your query."
-                return ToolResult(success=True, result_for_llm=message, metadata={"query": args.query})
-
+                return {
+                    "success": True,
+                    "message": "No matching domain knowledge found.",
+                    "results": []
+                }
+            
             formatted_results = []
             for idx, document in enumerate(documents):
                 meta = metadatas[idx] if idx < len(metadatas) else {}
@@ -252,6 +266,225 @@ class SearchDomainKnowledgeTool(Tool):
                     formatted_results.append(f"{prefix}\n{' | '.join(annotations)}\n{document}")
                 else:
                     formatted_results.append(f"{prefix}\n{document}")
+            
+            return {
+                "success": True,
+                "message": f"Found {len(documents)} domain knowledge entries.",
+                "results": formatted_results
+            }
+        except Exception as e:
+            print(f"[UnifiedSearchTool] Error during domain search: {e}")
+            return {
+                "success": False,
+                "message": f"An error occurred during domain search: {e}",
+                "results": []
+            }
+    
+    async def execute(self, context: ToolContext, args: UnifiedSearchToolInput) -> ToolResult:
+        """Executes unified search across schema and/or domain knowledge."""
+        search_type = args.search_type.lower() if args.search_type else "both"
+        
+        print(f"[UnifiedSearchTool] Executing search with query: '{args.query}', type: '{search_type}'")
+        
+        schema_results = []
+        domain_results = []
+        schema_success = True
+        domain_success = True
+        
+        # 搜索schema
+        if search_type in ("schema", "both"):
+            schema_data = await self._search_schema(args.query, args.schema_results)
+            schema_results = schema_data.get("results", [])
+            schema_success = schema_data.get("success", False)
+            if not schema_success:
+                schema_results = [f"[Schema Search Error] {schema_data.get('message', 'Unknown error')}"]
+        
+        # 搜索domain knowledge
+        if search_type in ("domain", "both"):
+            domain_data = await self._search_domain(args.query, args.domain_results)
+            domain_results = domain_data.get("results", [])
+            domain_success = domain_data.get("success", False)
+            if not domain_success:
+                domain_results = [f"[Domain Search Error] {domain_data.get('message', 'Unknown error')}"]
+        
+        # 合并结果
+        formatted_parts = []
+        
+        if schema_results:
+            formatted_parts.append("## [Schema] 数据库结构信息\n")
+            formatted_parts.extend(schema_results)
+        
+        if domain_results:
+            if formatted_parts:
+                formatted_parts.append("\n---\n")
+            formatted_parts.append("## [Domain Knowledge] 领域知识\n")
+            formatted_parts.extend(domain_results)
+        
+        if not formatted_parts:
+            result_text = "No relevant information found in either schema or domain knowledge."
+        else:
+            result_text = "\n\n".join(formatted_parts)
+        
+        # 确定整体成功状态
+        overall_success = True
+        if search_type == "schema":
+            overall_success = schema_success
+        elif search_type == "domain":
+            overall_success = domain_success
+        else:  # both
+            overall_success = schema_success or domain_success  # 至少一个成功即可
+        
+        return ToolResult(
+            success=overall_success,
+            result_for_llm=result_text,
+            metadata={
+                "query": args.query,
+                "search_type": search_type,
+                "schema_success": schema_success,
+                "domain_success": domain_success,
+                "schema_results_count": len(schema_results),
+                "domain_results_count": len(domain_results),
+            },
+        )
+
+
+class SearchFailedCasesTool(Tool):
+    """
+    A tool to search for similar failed SQL cases (negative examples) from past executions.
+    Use this tool to find relevant failure patterns that should be avoided when generating SQL.
+    """
+    name: str = "search_failed_cases"
+    description: str = (
+        "Searches for similar failed SQL cases from past executions to learn from past mistakes. "
+        "Use this tool BEFORE generating SQL when the current question is similar to previous failed cases, "
+        "or AFTER SQL execution fails to understand what went wrong. "
+        "The tool returns failed cases with their questions, error SQL, and error reasons to help avoid similar errors. "
+        "This is especially useful when you encounter questions about similar topics, metrics, or table combinations that have failed before."
+    )
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.collection = None
+
+    def get_args_schema(self) -> BaseModel:
+        return SearchFailedCasesToolInput
+
+    def _get_collection(self):
+        """Initializes and returns the ChromaDB collection for failed cases."""
+        if self.collection is None:
+            try:
+                workspace_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
+                chroma_db_path = os.path.join(workspace_root, "T3", "chroma_db")
+                print(f"[SearchFailedCasesTool] Connecting to ChromaDB at: {chroma_db_path}")
+                client = chromadb.PersistentClient(path=chroma_db_path)
+                
+                # Try to get existing collection, or create if it doesn't exist
+                try:
+                    self.collection = client.get_collection(name="failed_cases")
+                    count = self.collection.count()
+                    if count > 0:
+                        print(f"[SearchFailedCasesTool] Connected to collection 'failed_cases' (contains {count} documents)")
+                    else:
+                        print(
+                            f"[SearchFailedCasesTool] Warning: Collection 'failed_cases' exists but is empty. "
+                            f"Please run 'python T3/script/ingest_failed_cases.py' to populate it."
+                        )
+                except Exception as get_exc:
+                    # Collection doesn't exist, create it
+                    print(f"[SearchFailedCasesTool] Collection 'failed_cases' not found, creating it: {get_exc}")
+                    self.collection = client.get_or_create_collection(name="failed_cases")
+                    print(
+                        f"[SearchFailedCasesTool] Warning: Collection 'failed_cases' was created but is empty. "
+                        f"Please run 'python T3/script/ingest_failed_cases.py' to populate it."
+                    )
+            except Exception as exc:  # pylint: disable=broad-except
+                print(f"[SearchFailedCasesTool] Error connecting to ChromaDB: {exc}")
+                import traceback
+                traceback.print_exc()
+                return None
+        return self.collection
+
+    async def execute(self, context: ToolContext, args: SearchFailedCasesToolInput) -> ToolResult:
+        """Executes a search query against the failed cases in ChromaDB."""
+        collection = self._get_collection()
+        if collection is None:
+            message = "Error: Could not connect to the failed cases database. Please run 'python T3/script/ingest_failed_cases.py' first."
+            return ToolResult(success=False, result_for_llm=message, error=message, metadata={"query": args.query})
+
+        try:
+            print(f"Executing failed cases search with query: '{args.query}'")
+            results = collection.query(query_texts=[args.query], n_results=args.n_results)
+
+            documents_list = results.get("documents") or [[]]
+            metadatas_list = results.get("metadatas") or [[]]
+            distances_list = results.get("distances") or [[]]
+            ids_list = results.get("ids") or [[]]
+
+            documents = documents_list[0] if documents_list else []
+            metadatas = metadatas_list[0] if metadatas_list else []
+            distances = distances_list[0] if distances_list else []
+            ids = ids_list[0] if ids_list else []
+
+            if not documents:
+                message = "No similar failed cases found for your query."
+                return ToolResult(
+                    success=True,
+                    result_for_llm=message,
+                    metadata={"query": args.query, "documents": [], "metadatas": []},
+                )
+
+            print(f"Found {len(documents)} similar failed cases.")
+
+            formatted_results = []
+            for idx, document in enumerate(documents):
+                meta = metadatas[idx] if idx < len(metadatas) else {}
+                distance = distances[idx] if idx < len(distances) else None
+                doc_id = ids[idx] if idx < len(ids) else None
+                
+                # 从文档中提取信息
+                lines = document.split('\n')
+                question = ""
+                sql = ""
+                error = ""
+                tables = ""
+                for line in lines:
+                    if line.startswith("问题:"):
+                        question = line.replace("问题:", "").strip()
+                    elif line.startswith("涉及表:"):
+                        tables = line.replace("涉及表:", "").strip()
+                    elif line.startswith("错误SQL:"):
+                        sql = line.replace("错误SQL:", "").strip()
+                    elif line.startswith("错误原因:"):
+                        error = line.replace("错误原因:", "").strip()
+                
+                header = f"失败案例 {idx + 1}:"
+                similarity_info = f"相似度: {1 - distance:.3f}" if isinstance(distance, (float, int)) else ""
+                sql_id = meta.get("sql_id", "")
+                
+                info_parts = []
+                if sql_id:
+                    info_parts.append(f"SQL ID: {sql_id}")
+                if similarity_info:
+                    info_parts.append(similarity_info)
+                if meta.get("error_type"):
+                    info_parts.append(f"错误类型: {meta.get('error_type')}")
+                
+                info_str = " | ".join(info_parts)
+                
+                result_text = f"{header}"
+                if info_str:
+                    result_text += f"\n{info_str}"
+                result_text += f"\n问题: {question}"
+                if tables:
+                    result_text += f"\n涉及表: {tables}"
+                if sql:
+                    # 截断过长的SQL
+                    sql_display = sql[:300] + "..." if len(sql) > 300 else sql
+                    result_text += f"\n错误SQL: {sql_display}"
+                if error:
+                    result_text += f"\n错误原因: {error}"
+                
+                formatted_results.append(result_text)
 
             result_text = "\n\n".join(formatted_results)
 
@@ -263,304 +496,14 @@ class SearchDomainKnowledgeTool(Tool):
                     "documents": documents,
                     "metadatas": metadatas,
                     "distances": distances,
+                    "ids": ids,
                 },
             )
         except Exception as exc:  # pylint: disable=broad-except
-            print(f"An error occurred during domain knowledge search: {exc}")
+            print(f"An error occurred during failed cases search: {exc}")
             return ToolResult(
                 success=False,
                 result_for_llm=f"An error occurred during search: {exc}",
                 error=str(exc),
                 metadata={"query": args.query},
             )
-
-
-class InvestigateConceptToolInput(BaseModel):
-    concept: str = Field(..., description="The unfamiliar concept or term that needs clarification.")
-    schema_results: int = Field(4, gt=0, le=10, description="Maximum schema snippets to retrieve.")
-    domain_results: int = Field(4, gt=0, le=10, description="Maximum domain knowledge entries to retrieve.")
-    memory_results: int = Field(5, gt=0, le=15, description="Maximum historical tool usages to surface.")
-    include_agent_memory: bool = Field(True, description="Whether to search previously logged tool usage memories.")
-
-
-class InvestigateConceptTool(Tool):
-    name: str = "investigate_unknown_concept"
-    description: str = (
-        "Launches a focused Vanna sub-agent that controls its own context and tool planning to investigate"
-        " unfamiliar concepts across the full knowledge base."
-    )
-
-    def __init__(self, **kwargs: Any):
-        super().__init__(**kwargs)
-
-    def get_args_schema(self) -> BaseModel:
-        return InvestigateConceptToolInput
-    def _build_user_prompt(self, args: InvestigateConceptToolInput) -> str:
-        return (
-            "You are the TGAC concept-research sub-agent. Your task is to understand the concept "
-            f"'{args.concept}'.\n"
-            "Plan your own investigation, leverage the available tools, and deliver a crisp brief that helps the"
-            " main analyst write accurate SQL. Follow these rules:\n"
-            "1. Map the concept to relevant tables, columns, and metrics using `search_schema` (<= "
-            f"{args.schema_results} results per call).\n"
-            "2. Cross-check terminology and business definitions using `search_domain_knowledge` (<= "
-            f"{args.domain_results} results).\n"
-            "3. If past tool memories are available, identify prior successful reasoning paths.\n"
-            "4. Iterate until you have enough evidence. Prefer multiple narrow queries over one broad request.\n"
-            "5. Summarize with sections: Concept Interpretation, Relevant Schema Assets, Domain Insights,"
-            " and Open Questions / Next Steps.\n"
-            "6. Provide actionable guidance and call out uncertainties.\n"
-            "Begin by outlining your plan before calling tools."
-        )
-
-    def _create_llm_service(self) -> OpenAILlmService:
-        base_url = (
-            os.getenv("SUB_AGENT_OPENAI_BASE_URL")
-            or os.getenv("OPENAI_BASE_URL")
-            or "https://dashscope.aliyuncs.com/compatible-mode/v1"
-        )
-        model = (
-            os.getenv("SUB_AGENT_OPENAI_MODEL")
-            or os.getenv("OPENAI_MODEL")
-            or "qwen3-coder-flash"
-        )
-        api_key = os.getenv("SUB_AGENT_OPENAI_API_KEY") or os.getenv("OPENAI_API_KEY")
-        return OpenAILlmService(base_url=base_url, model=model, api_key=api_key)
-
-    def _create_sub_agent(self) -> tuple[Agent, User]:
-        llm_service = self._create_llm_service()
-        access_groups = ["admin"]
-
-        registry = ToolRegistry()
-        registry.register_local_tool(SearchSchemaTool(), access_groups=access_groups)
-        registry.register_local_tool(SearchDomainKnowledgeTool(), access_groups=access_groups)
-
-        agent_memory = DemoAgentMemory(max_items=512)
-
-        config = AgentConfig(
-            max_tool_iterations=25,
-            stream_responses=False,
-            include_thinking_indicators=False,
-            #temperature=0.1,
-            #max_tokens=1600,
-        )
-
-        user = User(
-            id=f"concept_subagent_{uuid4()}",
-            email="admin@example.com",  # synthetic identity
-            group_memberships=access_groups,
-        )
-
-        class _StaticResolver(UserResolver):
-            def __init__(self, static_user: User) -> None:
-                self._user = static_user
-
-            async def resolve_user(self, request_context: RequestContext) -> User:  # type: ignore[override]
-                return self._user
-
-        resolver = _StaticResolver(user)
-
-        agent = Agent(
-            llm_service=llm_service,
-            tool_registry=registry,
-            user_resolver=resolver,
-            agent_memory=agent_memory,
-            config=config,
-        )
-        return agent, user
-
-    @staticmethod
-    def _truncate_text(value: str, limit: int = 1200) -> str:
-        text = value.strip()
-        if len(text) <= limit:
-            return text
-        return text[:limit] + " … [truncated]"
-
-    async def execute(self, context: ToolContext, args: InvestigateConceptToolInput) -> ToolResult:
-        metadata_bundle: Dict[str, Any] = {"concept": args.concept}
-
-        try:
-            sub_agent, sub_agent_user = self._create_sub_agent()
-        except Exception as exc:  # pylint: disable=broad-except
-            message = f"Failed to initialize concept sub-agent: {exc}"
-            return ToolResult(
-                success=False,
-                result_for_llm=message,
-                error=str(exc),
-                metadata=metadata_bundle,
-            )
-
-        conversation_id = f"concept-run-{uuid4()}"
-        metadata_bundle["conversation_id"] = conversation_id
-        metadata_bundle["sub_agent_user_id"] = sub_agent_user.id
-
-        user_prompt = self._build_user_prompt(args)
-        metadata_bundle["sub_agent_prompt"] = user_prompt
-
-        request_context = RequestContext(
-            metadata={
-                "invoked_by_tool": self.name,
-                "parent_conversation": context.conversation_id,
-                "concept": args.concept,
-            }
-        )
-
-        print(
-            "[InvestigateConceptTool] Starting sub-agent run",
-            f"conversation_id={conversation_id}",
-            f"concept='{args.concept}'",
-        )
-        print("[InvestigateConceptTool] Prompt dispatched to sub-agent:\n", user_prompt)
-
-        try:
-            async for _component in sub_agent.send_message(
-                request_context,
-                user_prompt,
-                conversation_id=conversation_id,
-            ):
-                try:
-                    rich_type = getattr(_component.rich_component, "type", None)
-                    rich_name = getattr(rich_type, "value", rich_type)
-                    print(
-                        "[InvestigateConceptTool] Sub-agent emitted component",
-                        f"type={rich_name}",
-                    )
-                except Exception:  # pylint: disable=broad-except
-                    print("[InvestigateConceptTool] Sub-agent emitted a UI component.")
-                # Conversation transcript is persisted; nothing else required per component.
-                continue
-        except Exception as exc:  # pylint: disable=broad-except
-            message = f"Concept sub-agent execution failed: {exc}"
-            return ToolResult(
-                success=False,
-                result_for_llm=message,
-                error=str(exc),
-                metadata=metadata_bundle,
-            )
-
-        conversation = await sub_agent.conversation_store.get_conversation(
-            conversation_id, sub_agent_user
-        )
-
-        if conversation is None:
-            message = "Concept sub-agent completed without returning a transcript."
-            return ToolResult(
-                success=False,
-                result_for_llm=message,
-                error=message,
-                metadata=metadata_bundle,
-            )
-
-        print(
-            "[InvestigateConceptTool] Sub-agent conversation captured",
-            f"messages={len(conversation.messages)}",
-        )
-
-        transcript_records: List[Dict[str, Any]] = []
-        assistant_messages: List[str] = []
-        tool_invocations: List[Dict[str, Any]] = []
-        tool_outputs: List[str] = []
-
-        for message in conversation.messages:
-            transcript_records.append(
-                {
-                    "role": message.role,
-                    "content": self._truncate_text(message.content, 600),
-                    "tool_call_id": message.tool_call_id,
-                    "timestamp": message.timestamp.isoformat(),
-                }
-            )
-
-            if message.role == "assistant":
-                if message.content:
-                    assistant_messages.append(message.content)
-                if message.tool_calls:
-                    for call in message.tool_calls:
-                        tool_invocations.append({"name": call.name, "arguments": call.arguments})
-            elif message.role == "tool":
-                tool_outputs.append(message.content)
-
-        metadata_bundle["transcript"] = transcript_records
-        metadata_bundle["assistant_messages"] = assistant_messages
-        metadata_bundle["executed_tools"] = tool_invocations
-        metadata_bundle["tool_outputs"] = [self._truncate_text(t, 1200) for t in tool_outputs]
-
-        memory_highlights: List[str] = []
-        if args.include_agent_memory and hasattr(context.agent_memory, "search_similar_usage"):
-            try:
-                memory_hits = await context.agent_memory.search_similar_usage(  # type: ignore[attr-defined]
-                    args.concept,
-                    context,
-                    limit=args.memory_results,
-                )
-            except Exception as exc:  # pylint: disable=broad-except
-                metadata_bundle["agent_memory_error"] = str(exc)
-            else:
-                formatted_hits: List[Dict[str, Any]] = []
-                for hit in memory_hits:
-                    memory = getattr(hit, "memory", None)
-                    similarity = getattr(hit, "similarity_score", None)
-                    if memory is None:
-                        continue
-                    record = {
-                        "question": getattr(memory, "question", ""),
-                        "tool_name": getattr(memory, "tool_name", ""),
-                        "args": getattr(memory, "args", {}),
-                        "success": getattr(memory, "success", True),
-                        "similarity": similarity,
-                    }
-                    formatted_hits.append(record)
-                    question_preview = self._truncate_text(record["question"] or "", 160)
-                    tool_name = record["tool_name"] or "unknown_tool"
-                    similarity_txt = f"{similarity:.2f}" if isinstance(similarity, (float, int)) else "n/a"
-                    memory_highlights.append(
-                        f"- {tool_name} (similarity {similarity_txt}) → {question_preview}"
-                    )
-                metadata_bundle["memory_hits"] = formatted_hits
-
-        final_response = assistant_messages[-1].strip() if assistant_messages else ""
-        if not final_response:
-            final_response = (
-                "No assistant summary was produced. Consult the tool evidence below for raw findings."
-            )
-
-        result_sections: List[str] = ["### Concept Investigation Summary", final_response]
-
-        if tool_invocations:
-            result_sections.append("### Executed Tools")
-            for call in tool_invocations:
-                result_sections.append(
-                    f"- {call['name']} with args {call['arguments']}"
-                )
-
-        if memory_highlights:
-            result_sections.append("### Historical Signals")
-            result_sections.extend(memory_highlights)
-
-        if tool_outputs:
-            result_sections.append("### Tool Evidence")
-            for idx, payload in enumerate(tool_outputs, start=1):
-                result_sections.append(
-                    f"{idx}. {self._truncate_text(payload, 800)}"
-                )
-        else:
-            result_sections.append("### Tool Evidence")
-            result_sections.append("No tool outputs were captured.")
-
-        final_payload = "\n".join(result_sections).strip()
-
-        print("[InvestigateConceptTool] Sub-agent run completed successfully.")
-        if tool_invocations:
-            print(
-                "[InvestigateConceptTool] Tools invoked:",
-                ", ".join(call["name"] for call in tool_invocations),
-            )
-
-        # Cleanup the temporary conversation to keep the sub-agent stateless per run.
-        await sub_agent.conversation_store.delete_conversation(conversation_id, sub_agent_user)
-
-        return ToolResult(
-            success=True,
-            result_for_llm=final_payload,
-            metadata=metadata_bundle,
-        )

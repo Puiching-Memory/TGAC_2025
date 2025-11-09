@@ -2,10 +2,13 @@ import json
 import os
 import sys
 from toon_format import encode
+from tqdm import tqdm
+
+
 
 
 def _store_toon_schema_to_chromaDB(encoded_schemas, merged_data, chroma_path, workspace_root):
-    """将TOON编码的schema数据存储到ChromaDB"""
+    """将TOON编码的表结构存储到ChromaDB"""
     try:
         import chromadb
     except ImportError:
@@ -15,46 +18,65 @@ def _store_toon_schema_to_chromaDB(encoded_schemas, merged_data, chroma_path, wo
     try:
         client = chromadb.PersistentClient(path=str(chroma_path))
         collection = client.get_or_create_collection(name="schema_knowledge")
-        print(f"准备存储TOON编码的schema数据...")
+        print(f"准备存储TOON编码的表结构数据...")
 
         # 准备documents、metadatas和ids
         documents = []
         metadatas = []
         ids = []
         
-        # 将每个表的TOON编码作为独立文档存储
-        for table_name, encoded_schema in encoded_schemas.items():
-            documents.append(encoded_schema)
-            ids.append(f"toon_encoded_table_{table_name}")
-            
-            # 获取表的基本信息
+        # 为每个表存储TOON编码
+        for table_name, encoded_schema in tqdm(encoded_schemas.items(), desc="存储表结构", unit="表"):
             table_info = merged_data.get(table_name, {})
+            fields = table_info.get("fields", {})
+            
+            # 存储TOON编码
+            documents.append(encoded_schema)
+            ids.append(f"table_{table_name}")
             metadatas.append({
-                "type": "toon_encoded_table",
+                "type": "table",
                 "table_name": table_name,
                 "source": "merged_schema_analysis",
                 "encoding_format": "TOON",
-                "field_count": len(table_info.get("fields", {})),
-                "description": table_info.get("comment", "")
+                "field_count": str(len(fields)),
             })
         
-        # 存储开发者查看的载荷
+        print(f"生成了 {len(documents)} 个表结构文档")
+        
+        # 存储开发者查看的载荷示例
         temp_payload = {
-            "documents": documents,
-            "metadatas": metadatas,
-            "ids": ids,
+            "documents": documents[:5],  # 只保存前5个作为示例
+            "metadatas": metadatas[:5],
+            "ids": ids[:5],
+            "total_count": len(documents),
         }
-        temp_output_path = os.path.join(workspace_root, "T3", "temp", "toon_schema_payload.json")
+        temp_output_path = os.path.join(workspace_root, "T3", "temp", "schema_payload_sample.json")
         with open(temp_output_path, 'w', encoding='utf-8') as f:
             json.dump(temp_payload, f, ensure_ascii=False, indent=2)
-        print(f"TOON Schema载荷已保存到: {temp_output_path}")
+        print(f"Schema载荷示例已保存到: {temp_output_path}")
 
+        # 清理旧数据
+        try:
+            existing_count = collection.count()
+            if existing_count > 0:
+                print(f"清理 {existing_count} 个旧文档...")
+                existing_data = collection.get()
+                if existing_data and existing_data.get("ids"):
+                    collection.delete(ids=existing_data["ids"])
+        except Exception as cleanup_exc:
+            print(f"警告: 清理旧数据时出错（不影响新数据存储）: {cleanup_exc}")
+        
+        # 存储新数据
         collection.upsert(documents=documents, metadatas=metadatas, ids=ids)
-        print(f"TOON编码Schema数据存储完成，共存储{len(encoded_schemas)}个表。")
+        print(f"TOON编码的表结构数据存储完成，共存储 {len(documents)} 个表。")
         
     except Exception as exc:
-        print(f"无法将TOON编码Schema数据存储到ChromaDB: {exc}")
+        print(f"无法将Schema数据存储到ChromaDB: {exc}")
+        import traceback
+        traceback.print_exc()
         sys.exit(1)
+
+
 
 
 def merge_schema_data(mschema_data, schema_data):
@@ -119,7 +141,7 @@ def analyze_schema():
     os.makedirs(output_dir, exist_ok=True)
     
     # ChromaDB配置
-    chroma_path = os.path.join(workspace_root, "./T3/chroma_db")
+    chroma_path = os.path.join(workspace_root, "T3", "chroma_db")
     
     # 加载数据文件
     print("正在加载 mschema_database_main.json...")
@@ -138,8 +160,7 @@ def analyze_schema():
     print("正在对各个表进行TOON编码...")
     encoded_schemas = {}
     
-    for table_name, table_info in merged_data.items():
-        print(f"  正在编码表: {table_name}")
+    for table_name, table_info in tqdm(merged_data.items(), desc="TOON编码", unit="表"):
         try:
             # 为每个表创建独立的编码数据
             table_data = {
@@ -174,7 +195,6 @@ def analyze_schema():
             toon_output_path = os.path.join(output_dir, f"encoded_schema_table_{table_name}.toon")
             with open(toon_output_path, 'w', encoding='utf-8') as f:
                 f.write(cleaned_toon)
-            print(f"    表 {table_name} 的TOON编码结果已保存到: {toon_output_path}")
             
         except Exception as e:
             print(f"    编码表 {table_name} 时出错: {e}")

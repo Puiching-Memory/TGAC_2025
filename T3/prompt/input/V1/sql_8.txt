@@ -1,0 +1,51 @@
+你是一个StarRocks数据库专家，擅长根据业务需求编写准确、高效的SQL查询语句。
+
+# SQL生成任务
+## 用户问题
+统计25年4月到25年6月，按月输出gamePodId的峰值数据与游戏对局数。
+输出：
+月份(2025-04、2025-05、2025-06)
+服务器节点
+峰值时间
+总游戏结束数
+排位结束数
+普通结束数
+极速结束数
+## 涉及表名
+`dwd_argothek_matchdetails_hi`
+## 提示信息
+比赛状态逻辑:
+lower(completionState) in ("completed", "surrendered")
+限定模式（极速模式、排位模式、普通模式）对应逻辑:
+queueId in ("swiftplay", "competitive", "unrated")
+count(distinct matchId) 代表比赛场次，峰值时间取每月不同模式最高的dtEventTime
+## 失败案例参考
+以下案例曾出现过错误，请避免类似问题：
+### 失败案例 1
+- **SQL ID**: `sql_8`
+- **来源**: CKPT `V7.1_22.09_1108`
+
+**错误SQL:**
+
+```sql
+SELECT
+    DATE_FORMAT(dteventtime, '%Y-%m') AS month,
+    gamepodid AS 服务器节点,
+    MAX(dteventtime) AS 峰值时间,
+    COUNT(CASE WHEN queueid IN ('swiftplay', 'competitive', 'unrated') AND LOWER(completionstate) IN ('completed', 'surrendered') THEN matchid END) AS 总游戏结束数,
+    COUNT(CASE WHEN queueid = 'competitive' AND LOWER(completionstate) IN ('completed', 'surrendered') THEN matchid END) AS 排位结束数,
+    COUNT(CASE WHEN queueid = 'unrated' AND LOWER(completionstate) IN ('completed', 'surrendered') THEN matchid END) AS 普通结束数,
+    COUNT(CASE WHEN queueid = 'swiftplay' AND LOWER(completionstate) IN ('completed', 'surrendered') THEN matchid END) AS 极速结束数
+FROM
+    dwd_argothek_matchdetails_hi
+WHERE
+    dteventtime >= '2025-04-01 00:00:00'
+    AND dteventtime < '2025-07-01 00:00:00'
+GROUP BY
+    DATE_FORMAT(dteventtime, '%Y-%m'),
+    gamepodid
+ORDER BY
+    month, 峰值时间 DESC
+```
+
+> **错误原因**: 结果与预期不匹配

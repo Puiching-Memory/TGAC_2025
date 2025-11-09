@@ -1,3 +1,4 @@
+import hashlib
 import json
 import sys
 from pathlib import Path
@@ -88,6 +89,11 @@ def ingest_common_knowledge() -> None:
 
         header = section if not subsection else f"{section} - {subsection}"
         documents.append(f"{header}: {content}")
+        
+        # Generate stable ID based on content hash to avoid duplicates when order changes
+        content_hash = hashlib.md5(f"{section}|{subsection}|{content}".encode('utf-8')).hexdigest()[:12]
+        stable_id = f"domain_knowledge_{content_hash}"
+        
         metadatas.append(
             {
                 "section": section,
@@ -96,7 +102,7 @@ def ingest_common_knowledge() -> None:
                 "entry_index": str(idx),
             }
         )
-        ids.append(f"domain_knowledge_{idx}")
+        ids.append(stable_id)
 
     try:
         import chromadb
@@ -116,6 +122,17 @@ def ingest_common_knowledge() -> None:
         }
         temp_output_path.write_text(json.dumps(temp_payload, ensure_ascii=False, indent=2), encoding="utf-8")
         print(f"Serialized payload written to {temp_output_path} for inspection.")
+
+        # Clean up old data: delete entries that are no longer in the source file
+        try:
+            existing_ids = set(collection.get()["ids"])
+            new_ids = set(ids)
+            ids_to_delete = existing_ids - new_ids
+            if ids_to_delete:
+                print(f"Cleaning up {len(ids_to_delete)} removed knowledge entries...")
+                collection.delete(ids=list(ids_to_delete))
+        except Exception as cleanup_exc:
+            print(f"Warning: Error during cleanup (new data will still be stored): {cleanup_exc}")
 
         collection.upsert(documents=documents, metadatas=metadatas, ids=ids)
         print("Knowledge ingestion complete.")

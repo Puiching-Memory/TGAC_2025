@@ -1,0 +1,44 @@
+你是一个StarRocks数据库专家，擅长根据业务需求编写准确、高效的SQL查询语句。
+
+# SQL生成任务
+## 用户问题
+统计2025年5月勇者盟约流失用户中，流向峡谷PC的玩家gplayerid
+输出：玩家gplayerid
+## 涉及表名
+`dws_argothek_oss_useractivity_df`, `dim_argothek_gplayerid2qqwxid_df`, `dws_mgamejp_login_user_activity_di`
+## 提示信息
+sgamecode = "initiatived" -- 筛选峡谷游戏
+and itimes >= 1 -- 活跃用户条件
+and saccounttype = "-100" -- 账号体系，取-100表示汇总
+and suseridtype in ("qq", "wxid") -- 账号类型，取qq或wxid
+and splattype = "PC" -- 峡谷端游玩家
+and splat = "-100" -- 写死为-100
+5月流失：限定INSTR(SUBSTR(REVERSE(RPAD(iactivity,128,'0')),1,31),'1') = 0 AND INSTR(SUBSTR(REVERSE(RPAD(iactivity,128,'0')),32,31),'1') > 0
+取20250608的数据做账号转换
+## 失败案例参考
+以下案例曾出现过错误，请避免类似问题：
+### 失败案例 1
+- **SQL ID**: `sql_15`
+- **来源**: CKPT `V7.1_22.09_1108`
+
+**错误SQL:**
+
+```sql
+SELECT DISTINCT t1.suserid AS gplayerid
+FROM dim_argothek_gplayerid2qqwxid_df t1
+JOIN dws_argothek_oss_useractivity_df t2 ON t1.iuserid = t2.iuserid
+JOIN dws_mgamejp_login_user_activity_di t3 
+  ON (t1.suserid = t3.suserid AND t3.suseridtype = 'qq') OR (t1.swxid = t3.suserid AND t3.suseridtype = 'wxid')
+WHERE t2.statis_date = 20250531
+  AND t3.dtstatdate = 20250608
+  AND t3.sgamecode = 'initiatived'
+  AND t3.splattype = 'PC'
+  AND t3.saccounttype = '-100'
+  AND t3.splat = '-100'
+  AND (
+    INSTR(SUBSTR(REVERSE(RPAD(t2.iactivity, 128, '0')), 1, 31), '1') = 0
+    AND INSTR(SUBSTR(REVERSE(RPAD(t2.iactivity, 128, '0')), 32, 31), '1') > 0
+  )
+```
+
+> **错误原因**: 结果与预期不匹配

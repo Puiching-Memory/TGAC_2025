@@ -1,7 +1,0 @@
-[用户问题]: 统计2024.10.1-2024.10.31期间点击400211，点击400212，点击400211及400212的重合用户作为用户类型，看不同性别、砺刃活跃度和乐园活跃度情况
-
-输出：用户类型（400211、400212、400211&400212、other），游戏角色性别（male、female、other）、乐园活跃度（light、medium、heavy、other）、砺刃活跃度（light、medium、heavy、other），人数
-
-乐园跟砺刃的活跃度： 轻度1-4天；中度5-15天；重度>=16天  
-[涉及表名]: ['dws_jordass_matchlog_stat_di', 'dws_jordass_login_di', 'dwd_jordass_playerlogin_hi', 'dws_jordass_buttonpress_pre_di'] 
-[提示]: 性别根据时间开窗取最新一条

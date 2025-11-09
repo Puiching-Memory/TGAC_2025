@@ -1,0 +1,120 @@
+你是一个StarRocks数据库专家，擅长根据业务需求编写准确、高效的SQL查询语句。
+
+# SQL生成任务
+## 用户问题
+sql_40时间段2024.3.1-2024.6.30分月看用户当月在砺刃的 新进、回流、轻度留存、中度留存、重度留存
+
+输出：月份(202403、...、202406)、新进人数、回流人数、轻度留存人数、中度留存人数、重度留存人数
+
+## 涉及表名
+`dws_jordass_login_di`, `dws_jordass_login_df`
+## 提示信息
+新进：当月新进 
+回流：上个月未活跃的历史注册用户，在当月活跃
+轻度留存：留存用户（上个月活跃，本月也活跃的用户）在本月的活跃度1-4天
+中度留存：留存用户（上个月活跃，本月也活跃的用户）在本月的活跃度5-15天
+重度留存：留存用户（上个月活跃，本月也活跃的用户）在本月的活跃度16天及以上
+## 失败案例参考
+以下案例曾出现过错误，请避免类似问题：
+### 失败案例 1
+- **SQL ID**: `sql_40`
+- **来源**: CKPT `V7.1_22.09_1108`
+
+**错误SQL:**
+
+```sql
+WITH login_data AS (
+    SELECT
+        SUBSTR(dtstatdate, 1, 6) AS month,
+        vplayerid,
+        cbitmap,
+        dregdate,
+        SUBSTR(dregdate, 1, 6) AS reg_month
+    FROM dws_jordass_login_df
+    WHERE dtstatdate BETWEEN '20240301' AND '20240630'
+      AND LENGTH(cbitmap) = 100
+),
+monthly_activity AS (
+    SELECT
+        month,
+        vplayerid,
+        reg_month,
+        -- Extract the relevant portion of cbitmap for the current month
+        -- For simplicity, assuming we're looking at the last N bits for each month
+        -- We'll use a simpler approach to extract monthly activity
+        CAST(SUBSTR(cbitmap, 
+            CASE month 
+                WHEN '202403' THEN 72 
+                WHEN '202404' THEN 41 
+                WHEN '202405' THEN 10 
+                WHEN '202406' THEN 1 
+                ELSE 1 
+            END, 
+            CASE month 
+                WHEN '202403' THEN 31 
+                WHEN '202404' THEN 30 
+                WHEN '202405' THEN 31 
+                WHEN '202406' THEN 30 
+                ELSE 1 
+            END) AS CHAR) AS monthly_bitmap,
+        -- Count active days (number of '1's in the extracted substring)
+        LENGTH(REPLACE(
+            SUBSTR(cbitmap, 
+                CASE month 
+                    WHEN '202403' THEN 72 
+                    WHEN '202404' THEN 41 
+                    WHEN '202405' THEN 10 
+                    WHEN '202406' THEN 1 
+                    ELSE 1 
+                END, 
+                CASE month 
+                    WHEN '202403' THEN 31 
+                    WHEN '202404' THEN 30 
+                    WHEN '202405' THEN 31 
+                    WHEN '202406' THEN 30 
+                    ELSE 1 
+                END), '0', '')) - 
+        LENGTH(SUBSTR(cbitmap, 
+            CASE month 
+                WHEN '202403' THEN 72 
+                WHEN '202404' THEN 41 
+                WHEN '202405' THEN 10 
+                WHEN '202406' THEN 1 
+                ELSE 1 
+            END, 
+            CASE month 
+                WHEN '202403' THEN 31 
+                WHEN '202404' THEN 30 
+                WHEN '202405' THEN 31 
+                WHEN '202406' THEN 30 
+                ELSE 1 
+            END)) AS active_days
+    FROM login_data
+),
+user_status AS (
+    SELECT
+        curr.month,
+        curr.vplayerid,
+        curr.reg_month,
+        curr.active_days,
+        LAG(curr.active_days) OVER (PARTITION BY curr.vplayerid ORDER BY curr.month) AS prev_month_active_days
+    FROM monthly_activity curr
+)
+SELECT
+    month,
+    -- New users: registered in this month
+    COUNT(CASE WHEN reg_month = month THEN 1 END) AS new_users,
+    -- Returning users: were not active in previous month but are active this month, and not new
+    COUNT(CASE WHEN (prev_month_active_days = 0 OR prev_month_active_days IS NULL) AND reg_month != month THEN 1 END) AS returning_users,
+    -- Light retention: active both months, 1-4 days this month
+    COUNT(CASE WHEN prev_month_active_days > 0 AND active_days BETWEEN 1 AND 4 THEN 1 END) AS light_retained,
+    -- Medium retention: active both months, 5-15 days this month
+    COUNT(CASE WHEN prev_month_active_days > 0 AND active_days BETWEEN 5 AND 15 THEN 1 END) AS medium_retained,
+    -- Heavy retention: active both months, 16+ days this month
+    COUNT(CASE WHEN prev_month_active_days > 0 AND active_days >= 16 THEN 1 END) AS heavy_retained
+FROM user_status
+GROUP BY month
+ORDER BY month;
+```
+
+> **错误原因**: 结果与预期不匹配

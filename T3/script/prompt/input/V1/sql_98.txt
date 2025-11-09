@@ -1,5 +1,0 @@
-[用户问题]: 统计2024.05.27-2024.6.16每天的乐园高活跃用户和砺刃高活跃用户不重复人数、
-乐园高活跃用户和砺刃高活跃用户在当天登录的不重复人数
-输出：日期（YYYYMMDD），用户类型（乐园高活、砺刃高活），用户人数，登录人数  
-[涉及表名]: ['dws_jordass_login_di', 'dim_jordass_packet_conf', 'dws_jordass_buttonpress_pre_di'] 
-[提示]: 无

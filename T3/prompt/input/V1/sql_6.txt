@@ -1,0 +1,62 @@
+你是一个StarRocks数据库专家，擅长根据业务需求编写准确、高效的SQL查询语句。
+
+# SQL生成任务
+## 用户问题
+统计2025.6.12-2025.7.14号手游T2活跃用户在20250529之前端游注册的号码包。
+输出：vplayerid
+## 涉及表名
+`dim_argothek_gplayerid2qqwxid_df`, `dws_argothek_ce1_cbt2_vplayerid_suserid_di`
+## 提示信息
+用户活跃用户筛选条件：
+itag="T2"
+## 成功案例参考
+以下案例执行成功，可作为参考：
+### 成功案例 1
+- **SQL ID**: `sql_6`
+- **得分**: 1
+- **来源**: CKPT `V6_31.40_1105`
+
+**SQL:**
+
+```sql
+SELECT vplayerid
+FROM dws_argothek_ce1_cbt2_vplayerid_suserid_di
+WHERE itag = 'T2'
+  AND dtstatdate BETWEEN '20250612' AND '20250714'
+  AND iregdate < '20250529'
+```
+---
+### 成功案例 2
+- **SQL ID**: `sql_6`
+- **得分**: 1
+- **来源**: CKPT `V6.2_33.72_1109`
+
+**SQL:**
+
+```sql
+SELECT vplayerid
+FROM dws_argothek_ce1_cbt2_vplayerid_suserid_di
+WHERE itag = 'T2'
+  AND dtstatdate BETWEEN '20250612' AND '20250714'
+  AND iregdate < '20250529'
+```
+## 失败案例参考
+以下案例曾出现过错误，请避免类似问题：
+### 失败案例 1
+- **SQL ID**: `sql_6`
+- **来源**: CKPT `V7.1_22.09_1108`
+
+**错误SQL:**
+
+```sql
+SELECT DISTINCT dws.vplayerid
+FROM dws_argothek_ce1_cbt2_vplayerid_suserid_di dws
+JOIN dim_argothek_gplayerid2qqwxid_df dim ON dws.suserid = dim.suserid
+WHERE dws.itag = 'T2'
+  AND dws.dtstatdate BETWEEN '20250612' AND '20250714'
+  AND dim.iregdate < '20250529'
+  AND dim.vgameappid != '1110042823'  -- Assuming '1110042823' is the mobile app ID, so we filter for non-mobile (PC) registration
+ORDER BY dws.vplayerid;
+```
+
+> **错误原因**: 结果与预期不匹配

@@ -1,0 +1,53 @@
+你是一个StarRocks数据库专家，擅长根据业务需求编写准确、高效的SQL查询语句。
+
+# SQL生成任务
+## 用户问题
+统计2024.2.9首日累充活动领奖玩家分R
+输出：用户类型（沉默付费、历史非付费、小R、中R、大R、超R），活跃人数、首日付费人数，首日付费ARPU，前一个月有消耗点券人数
+
+沉默付费：历史付过费且前1个月没有消耗过点券
+点券的分R：
+前一个月的点券消耗总金额，小于100代表小R，[100-500)代表中R，[500,1500)代表大R，大于等于1500 -  代表超R
+
+## 涉及表名
+`dws_jordass_water_di`, `dws_jordass_login_di`, `dwd_jordass_currencylog_hi`, `dws_jordass_water_df`
+## 提示信息
+首日累充活动逻辑：
+actid = 2402096612 and awardidx between 1 and 7
+合并
+ActType = 661 and RecodType = 1
+首日付费ARPU计算方式：新用户首日总付费金额（点券）/新用户首日充值人数
+点券换算公式：1:10（rmb:点券）
+## 失败案例参考
+以下案例曾出现过错误，请避免类似问题：
+### 失败案例 1
+- **SQL ID**: `sql_61`
+- **来源**: CKPT `V7.1_22.09_1108`
+
+**错误SQL:**
+
+```sql
+SELECT user_type,
+       SUM(active_users) as active_count,
+       SUM(first_day_paying) as first_day_paying_count,
+       SUM(first_day_payment_amount) / NULLIF(SUM(first_day_paying), 0) as first_day_arpu,
+       SUM(spent_last_month) as spent_last_month_count
+FROM (
+    SELECT a.vplayerid, 
+           CASE WHEN COALESCE(b.jan_spending, 0) = 0 THEN '历史非付费'
+                WHEN b.jan_spending < 1000 THEN '小R'
+                WHEN b.jan_spending < 5000 THEN '中R'
+                WHEN b.jan_spending < 15000 THEN '大R'
+                ELSE '超R' END AS user_type,
+           1 as active_users,
+           CASE WHEN c.feb_spending > 0 THEN 1 ELSE 0 END as first_day_paying,
+           COALESCE(c.feb_spending, 0) as first_day_payment_amount,
+           CASE WHEN COALESCE(b.jan_spending, 0) > 0 THEN 1 ELSE 0 END as spent_last_month
+    FROM (SELECT DISTINCT vplayerid FROM dws_jordass_login_di WHERE dtstatdate = '20240209') a
+    LEFT JOIN (SELECT vplayerid, SUM(imoney) as jan_spending FROM dwd_jordass_currencylog_hi WHERE SUBSTR(dteventtime, 1, 10) BETWEEN '2024-01-09' AND '2024-01-31' AND imoney > 0 AND addorreduce = 1 GROUP BY vplayerid) b ON a.vplayerid = b.vplayerid
+    LEFT JOIN (SELECT vplayerid, SUM(imoney) as feb_spending FROM dwd_jordass_currencylog_hi WHERE SUBSTR(dteventtime, 1, 10) BETWEEN '2024-02-01' AND '2024-02-08' AND imoney > 0 AND addorreduce = 1 GROUP BY vplayerid) c ON a.vplayerid = c.vplayerid
+) final
+GROUP BY user_type
+```
+
+> **错误原因**: 结果与预期不匹配

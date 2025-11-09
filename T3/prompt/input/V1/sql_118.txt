@@ -1,0 +1,66 @@
+你是一个StarRocks数据库专家，擅长根据业务需求编写准确、高效的SQL查询语句。
+
+# SQL生成任务
+## 用户问题
+统计20240426-20240505期间活动为1193536的曝光情况
+曝光：itype='1'
+参与：itype in ('10','200','201','202','203','204','31','32','33','34','35','702','703')
+输出：曝光参与情况（曝光未参与，曝光且参与）,人数，传统模式人数，传统模式对局数，传统模式对局时长，活跃人数，活跃时长，专业赛人数，专业赛局数（按照记录数）
+## 涉及表名
+`dws_jordass_mode_roundrecord_di`, `dws_jordass_login_di`, `dwd_jordass_playerprofstagechange_hi`, `dwd_jordass_mysteryplaylog_hi`
+## 提示信息
+注意将曝光未参与中无记录的null值统一转化为0
+用户过滤条件：platid=255
+赛事id：TournamentID = 30002
+## 失败案例参考
+以下案例曾出现过错误，请避免类似问题：
+### 失败案例 1
+- **SQL ID**: `sql_118`
+- **来源**: CKPT `V7.1_22.09_1108`
+
+**错误SQL:**
+
+```sql
+SELECT 
+    CASE 
+        WHEN exposure.suser IS NOT NULL AND participation.suser IS NULL THEN '曝光未参与'
+        WHEN exposure.suser IS NOT NULL AND participation.suser IS NOT NULL THEN '曝光且参与'
+    END AS exposure_participation_status,
+    COUNT(DISTINCT exposure.suser) AS 人数,
+    
+    COUNT(DISTINCT CASE WHEN rr.modename = '传统模式' THEN rr.vplayerid END) AS 传统模式人数,
+    SUM(CASE WHEN rr.modename = '传统模式' THEN 1 ELSE 0 END) AS 传统模式对局数,
+    COALESCE(SUM(CASE WHEN rr.modename = '传统模式' THEN rr.roundtime ELSE 0 END), 0) AS 传统模式对局时长,
+    
+    COUNT(DISTINCT login.vplayerid) AS 活跃人数,
+    COALESCE(SUM(login.ionlinetime), 0) AS 活跃时长,
+    
+    COUNT(DISTINCT CASE WHEN ps.tournamentid = 30002 THEN ps.vplayerid END) AS 专业赛人数,
+    COUNT(CASE WHEN ps.tournamentid = 30002 THEN 1 ELSE NULL END) AS 专业赛局数
+FROM 
+    (SELECT DISTINCT suser, sroleid, SUBSTR(tdbank_imp_date, 1, 8) AS dtstatdate 
+     FROM dwd_jordass_mysteryplaylog_hi 
+     WHERE iactid = '1193536' AND itype = '1' AND sappid = 'qq' AND tdbank_imp_date BETWEEN '20240426' AND '20240505') AS exposure
+LEFT JOIN 
+    (SELECT DISTINCT suser, sroleid 
+     FROM dwd_jordass_mysteryplaylog_hi 
+     WHERE iactid = '1193536' AND itype IN ('10','200','201','202','203','204','31','32','33','34','35','702','703') AND sappid = 'qq' AND tdbank_imp_date BETWEEN '20240426' AND '20240505') AS participation
+ON exposure.suser = participation.suser AND exposure.sroleid = participation.sroleid
+
+-- Join with round record for traditional mode stats
+LEFT JOIN dws_jordass_mode_roundrecord_di rr 
+ON exposure.suser = rr.vplayerid AND rr.dtstatdate = exposure.dtstatdate
+
+-- Join with login data for active time
+LEFT JOIN dws_jordass_login_di login 
+ON exposure.suser = login.vplayerid AND login.dtstatdate = exposure.dtstatdate
+
+-- Join with player stage change for professional tournament
+LEFT JOIN dwd_jordass_playerprofstagechange_hi ps 
+on exposure.suser = ps.vplayerid AND ps.tdbank_imp_date LIKE CONCAT(exposure.dtstatdate, '%') AND ps.tournamentid = 30002
+
+GROUP BY 
+    exposure_participation_status;
+```
+
+> **错误原因**: 结果与预期不匹配

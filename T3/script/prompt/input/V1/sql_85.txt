@@ -1,5 +1,0 @@
-[用户问题]: 统计 20220506-20220508，20220513-20220515 两个区间的活跃用户进入匹配对局以及是否进入微赛事的情况
-输出：统计日期（YYYYMMDD），活跃人数，匹配人数，参加微赛事人数，未参加微赛事人数  
-[涉及表名]: ['dws_jordass_login_di', 'dwd_jordass_player_matchrecord_hi', 'dwd_jordass_roundflow_entertain_hi'] 
-[提示]: 对局匹配成功 matchresult ='ok'  ；
-微赛事时间：每天19-21点

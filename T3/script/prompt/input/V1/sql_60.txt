@@ -1,7 +1,0 @@
-[用户问题]: 统计20250226往前180天联盟用户，联盟用户的30天滚动付费人数
-输出：统计日期（YYYYMMDD），联盟并付费的人数  
-[涉及表名]: ['dws_jordass_water_di', 'dws_jordass_uid_login_df', 'dwd_jordass_player_allianceactive_hi'] 
-[提示]: 联盟活跃用户统计日期：
-where tdbank_imp_date>=date_sub("20250226",180) and tdbank_imp_date<"20250226"
-游戏付费流水统计日期：
-where dtstatdate>=date_sub("20250226",210) and dtstatdate<"20250226" and platid=255

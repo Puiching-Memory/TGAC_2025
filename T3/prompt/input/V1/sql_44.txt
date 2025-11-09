@@ -1,0 +1,44 @@
+你是一个StarRocks数据库专家，擅长根据业务需求编写准确、高效的SQL查询语句。
+
+# SQL生成任务
+## 用户问题
+统计2024.01.01-2024.12.31期间，付费用户的付费区间对应的付费人数和付费金额
+输出：付费区间(小R、中R、大R、超R、未知)、付费人数、付费金额（元）
+
+付费区间：小R小于等于12，中R(12,60]，大R(60,180]，超R(180+)
+## 涉及表名
+`dws_jordass_water_di`
+## 失败案例参考
+以下案例曾出现过错误，请避免类似问题：
+### 失败案例 1
+- **SQL ID**: `sql_44`
+- **来源**: CKPT `V7.1_22.09_1108`
+
+**错误SQL:**
+
+```sql
+SELECT
+    CASE
+        WHEN iamount <= 12 THEN '小R'
+        WHEN iamount > 12 AND iamount <= 60 THEN '中R'
+        WHEN iamount > 60 AND iamount <= 180 THEN '大R'
+        WHEN iamount > 180 THEN '超R'
+        ELSE '未知'
+    END AS 付费区间,
+    COUNT(DISTINCT vplayerid) AS 付费人数,
+    SUM(iamount) AS 付费金额
+FROM dws_jordass_water_di
+WHERE dtstatdate >= '20240101' AND dtstatdate <= '20241231'
+  AND iamount > 0
+GROUP BY
+    CASE
+        WHEN iamount <= 12 THEN '小R'
+        WHEN iamount > 12 AND iamount <= 60 THEN '中R'
+        WHEN iamount > 60 AND iamount <= 180 THEN '大R'
+        WHEN iamount > 180 THEN '超R'
+        ELSE '未知'
+    END
+ORDER BY FIELD(付费区间, '小R', '中R', '大R', '超R', '未知')
+```
+
+> **错误原因**: 结果与预期不匹配

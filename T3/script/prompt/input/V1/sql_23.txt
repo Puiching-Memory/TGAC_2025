@@ -1,5 +1,0 @@
-[用户问题]: 统计2025年3月24日至2025年3月30日，至少完成过一场对局，且渠道登录的用户qq
-输出:qq  
-[涉及表名]: ['dws_argothek_oss_login_di', 'dim_argothek_gplayerid2qqwxid_df', 'dwd_argothek_playermatchstats_hi', 'dim_argothek_gplayerid_vroleid_df'] 
-[提示]: 渠道筛选条件：iloginway = 3
-用户ID筛选swxid_type = "qq" -- 筛选swxid_type为"qq"

@@ -1,0 +1,77 @@
+你是一个StarRocks数据库专家，擅长根据业务需求编写准确、高效的SQL查询语句。
+
+# SQL生成任务
+## 用户问题
+统计日期： 上周：2023.7.5-2023.7.11 本周：2023.7.12-2023.7.18
+统计在上周全平台回流砺刃的用户中（7天以上回流、30天以上回流），本周的砺刃活跃情况（轻中重活跃和流失）
+,[1,2]为轻度，[3,5]为中度，[6,7]为重度，否则为流失。输出：回流类型（7天回流，30天回流），活跃情况（轻中重活跃和流失）,人数
+## 涉及表名
+`dws_jordass_login_di`, `dws_jordass_login_df`
+## 提示信息
+活跃情况使用dws_jordass_login_di表，回流使用dws_jordass_login_df
+## 失败案例参考
+以下案例曾出现过错误，请避免类似问题：
+### 失败案例 1
+- **SQL ID**: `sql_92`
+- **来源**: CKPT `V7.1_22.09_1108`
+
+**错误SQL:**
+
+```sql
+SELECT 
+    '7天回流' as 回流类型,
+    CASE 
+        WHEN COALESCE(di.ilogincount, 0) BETWEEN 1 AND 2 THEN '轻度'
+        WHEN COALESCE(di.ilogincount, 0) BETWEEN 3 AND 5 THEN '中度'
+        WHEN COALESCE(di.ilogincount, 0) BETWEEN 6 AND 7 THEN '重度'
+        ELSE '流失'
+    END AS 活跃情况,
+    COUNT(*) AS 人数
+FROM dws_jordass_login_df df
+LEFT JOIN dws_jordass_login_di di
+    ON df.vplayerid = di.vplayerid 
+    AND df.vgameappid = di.vgameappid
+    AND df.platid = di.platid
+    AND di.dtstatdate = '20230718'
+WHERE df.dtstatdate = '20230711'
+    AND SUBSTR(df.cbitmap, 1, 1) = '1'
+    AND SUBSTR(df.cbitmap, 2, 7) LIKE '000000%'
+GROUP BY
+    CASE 
+        WHEN COALESCE(di.ilogincount, 0) BETWEEN 1 AND 2 THEN '轻度'
+        WHEN COALESCE(di.ilogincount, 0) BETWEEN 3 AND 5 THEN '中度'
+        WHEN COALESCE(di.ilogincount, 0) BETWEEN 6 AND 7 THEN '重度'
+        ELSE '流失'
+    END
+
+UNION ALL
+
+SELECT 
+    '30天回流' as 回流类型,
+    CASE 
+        WHEN COALESCE(di.ilogincount, 0) BETWEEN 1 AND 2 THEN '轻度'
+        WHEN COALESCE(di.ilogincount, 0) BETWEEN 3 AND 5 THEN '中度'
+        WHEN COALESCE(di.ilogincount, 0) BETWEEN 6 AND 7 THEN '重度'
+        ELSE '流失'
+    END AS 活跃情况,
+    COUNT(*) AS 人数
+FROM dws_jordass_login_df df
+LEFT JOIN dws_jordass_login_di di
+    ON df.vplayerid = di.vplayerid 
+    AND df.vgameappid = di.vgameappid
+    AND df.platid = di.platid
+    AND di.dtstatdate = '20230718'
+WHERE df.dtstatdate = '20230711'
+    AND SUBSTR(df.cbitmap, 1, 1) = '1'
+    AND LENGTH(REPLACE(SUBSTR(df.cbitmap, 2, 30), '0', '')) <= 1
+GROUP BY
+    CASE 
+        WHEN COALESCE(di.ilogincount, 0) BETWEEN 1 AND 2 THEN '轻度'
+        WHEN COALESCE(di.ilogincount, 0) BETWEEN 3 AND 5 THEN '中度'
+        WHEN COALESCE(di.ilogincount, 0) BETWEEN 6 AND 7 THEN '重度'
+        ELSE '流失'
+    END
+ORDER BY 回流类型, 活跃情况;
+```
+
+> **错误原因**: 结果与预期不匹配

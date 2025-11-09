@@ -1,4 +1,0 @@
-[用户问题]: 统计20250226联盟前180日（包含当天）基础数据 说明：按照uid计算
-输出：统计日期（YYYYMMDD），角色DAU，联盟参与角色数，联盟完成特训任务角色数，联盟商店兑换次数  
-[涉及表名]: ['dwd_jordass_allianceshopbuy_hi', 'dwd_jordass_player_allianceactive_hi', 'dwd_jordass_alliancebootcamprecord_hi', 'dwd_jordass_playerlogout_hi', 'dwd_jordass_playerlogin_hi'] 
-[提示]: 无

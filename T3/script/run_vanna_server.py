@@ -14,11 +14,9 @@ from vanna.core.user import UserResolver, User, RequestContext
 from vanna import Agent,AgentConfig
 from vanna.core.registry import ToolRegistry
 from vanna.servers.fastapi import VannaFastAPIServer
-from vanna_hook import SaveTGACResultHook, TGACRunSqlTool
+from vanna_hook import TGACRunSqlTool
 from vannna_tools import (
-    InvestigateConceptTool,
-    SearchDomainKnowledgeTool,
-    SearchSchemaTool,
+    UnifiedSearchTool,
 )
 
 from vanna.core.enhancer import DefaultLlmContextEnhancer
@@ -36,17 +34,6 @@ llm = OpenAILlmService(
     # base_url="http://127.0.0.1:8891/v1",
     # model="XGenerationLab/XiYanSQL-QwenCoder-7B-2504",
     # api_key=None
-)
-
-# Set up database connection
-db_tool = TGACRunSqlTool(
-    sql_runner=MySQLRunner(
-        host="localhost",
-        database="database_main",
-        user="root",
-        password="",
-        port=9030
-    )
 )
 
 # Create a simple user resolver
@@ -98,10 +85,21 @@ agent_memory = _create_agent_memory()
 
 # Register tools
 tools = ToolRegistry()
+
+# Create db_tool
+db_tool = TGACRunSqlTool(
+    sql_runner=MySQLRunner(
+        host="localhost",
+        database="database_main",
+        user="root",
+        password="",
+        port=9030
+    ),
+    output_path="T3/upload/dataset_exe_result.json"  # Save results immediately after SQL execution
+)
+
 tools.register_local_tool(db_tool, access_groups=['admin', 'user'])
-tools.register_local_tool(SearchSchemaTool(), access_groups=['admin', 'user'])
-tools.register_local_tool(SearchDomainKnowledgeTool(), access_groups=['admin', 'user'])
-tools.register_local_tool(InvestigateConceptTool(), access_groups=['admin', 'user'])
+tools.register_local_tool(UnifiedSearchTool(), access_groups=['admin', 'user'])
 tools.register_local_tool(SaveQuestionToolArgsTool(), access_groups=['admin'])
 tools.register_local_tool(SearchSavedCorrectToolUsesTool(), access_groups=['admin', 'user'])
 tools.register_local_tool(SaveTextMemoryTool(), access_groups=['admin', 'user'])
@@ -111,13 +109,9 @@ agent = Agent(
     llm_service=llm,
     tool_registry=tools,
     user_resolver=user_resolver,
-    lifecycle_hooks=[
-        SaveTGACResultHook(
-            "T3/upload/dataset_exe_result.json",
-        )
-    ],
+    lifecycle_hooks=[],
     config=AgentConfig(
-        max_tool_iterations=30,
+        max_tool_iterations=100,
     ),
     agent_memory=agent_memory,
     llm_context_enhancer=DefaultLlmContextEnhancer(agent_memory)
