@@ -4,21 +4,29 @@ from vanna.integrations.openai import OpenAILlmService
 from vanna.integrations.mysql import MySQLRunner
 from vanna.tools.agent_memory import SaveQuestionToolArgsTool, SearchSavedCorrectToolUsesTool, SaveTextMemoryTool
 from vanna.integrations.local.agent_memory import DemoAgentMemory
-from vanna.integrations.chromadb import ChromaAgentMemory
+from vanna.integrations.chromadb import (
+    ChromaAgentMemory,
+    create_sentence_transformer_embedding_function,
+    get_device,
+)
 from vanna.core.user import UserResolver, User, RequestContext
 
 from vanna import Agent,AgentConfig
 from vanna.core.registry import ToolRegistry
 from vanna.servers.fastapi import VannaFastAPIServer
 from vanna_hook import SaveTGACResultHook, TGACRunSqlTool
-from vannna_tools import SearchSchemaTool, SearchDomainKnowledgeTool
+from vannna_tools import (
+    InvestigateConceptTool,
+    SearchDomainKnowledgeTool,
+    SearchSchemaTool,
+)
 
 from vanna.core.enhancer import DefaultLlmContextEnhancer
 
 # Set up OpenAI GPT as your LLM
 llm = OpenAILlmService(
     base_url="https://dashscope.aliyuncs.com/compatible-mode/v1",
-    model="qwen3-coder-plus-2025-09-23", # qwen3-coder-flash # qwen-plus # qwen3-coder-plus-2025-09-23,
+    model="qwen3-coder-flash", # qwen3-coder-flash # qwen-plus # qwen3-coder-plus-2025-09-23,
     api_key=os.getenv("OPENAI_API_KEY")  # Or use os.getenv("OPENAI_API_KEY")
 
     # base_url="http://127.0.0.1:1234/v1",
@@ -51,19 +59,49 @@ class SimpleUserResolver(UserResolver):
 # Initialize the user resolver
 user_resolver = SimpleUserResolver()
 
+EMBEDDING_MODEL = "Qwen/Qwen3-Embedding-0.6B"
+
+
+def _create_agent_memory() -> ChromaAgentMemory:
+    embedding_fn = None
+    try:
+        device = get_device()
+        embedding_fn = create_sentence_transformer_embedding_function(
+            model_name=EMBEDDING_MODEL,
+            device=device,
+        )
+        print(
+            f"Agent memory embedding ready on device='{device}' model='{EMBEDDING_MODEL}'",
+            flush=True,
+        )
+    except ImportError:
+        print(
+            "sentence-transformers not available; using default Chroma embeddings",
+            flush=True,
+        )
+    except Exception as exc:
+        print(
+            f"Failed to initialize embedding model '{EMBEDDING_MODEL}': {exc}",
+            flush=True,
+        )
+
+    return ChromaAgentMemory(
+        collection_name="vanna_tool_memory",
+        persist_directory="T3/chroma_db",
+        embedding_function=embedding_fn,
+    )
+
+
 # Set up agent memory for learning from questions and SQL
 # agent_memory = DemoAgentMemory(max_items=10000)
-agent_memory = ChromaAgentMemory(
-    collection_name="vanna_tool_memory",
-    persist_directory="T3/chroma_db",
-    embedding_model="Qwen/Qwen3-Embedding-0.6B"
-)
+agent_memory = _create_agent_memory()
 
 # Register tools
 tools = ToolRegistry()
 tools.register_local_tool(db_tool, access_groups=['admin', 'user'])
 tools.register_local_tool(SearchSchemaTool(), access_groups=['admin', 'user'])
 tools.register_local_tool(SearchDomainKnowledgeTool(), access_groups=['admin', 'user'])
+tools.register_local_tool(InvestigateConceptTool(), access_groups=['admin', 'user'])
 tools.register_local_tool(SaveQuestionToolArgsTool(), access_groups=['admin'])
 tools.register_local_tool(SearchSavedCorrectToolUsesTool(), access_groups=['admin', 'user'])
 tools.register_local_tool(SaveTextMemoryTool(), access_groups=['admin', 'user'])

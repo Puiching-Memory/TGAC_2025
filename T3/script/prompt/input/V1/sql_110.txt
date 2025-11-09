@@ -1,4 +1,3 @@
-你是一名StarRocks mysql 4.0.0专家, 请你生成sql语句回答[用户问题]。
 [用户问题]: 统计20220413-20220421全平台每天活跃的次留，3留，7留情况（分活动和登录）
 输出：统计日期(yyyymmdd),活动人数，登录次留，登录3留，登录7留，活动次留，活动3留，活动7留  
 [涉及表名]: ['dws_jordass_login_di', 'dwd_jordass_activity_rewardrecord_hi'] 

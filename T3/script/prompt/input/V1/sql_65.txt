@@ -1,4 +1,3 @@
-你是一名StarRocks mysql 4.0.0专家, 请你生成sql语句回答[用户问题]。
 [用户问题]: 查询2024.11.29-2024.12.19期间的任务领取数据，并按类型汇总（跨日期）
 输出 ：日期（YYYYMMDD、汇总），类型，人数，次数  
 [涉及表名]: ['dwd_jordass_activity_rewardrecord_hi'] 

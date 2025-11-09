@@ -1,4 +1,3 @@
-你是一名StarRocks mysql 4.0.0专家, 请你生成sql语句回答[用户问题]。
 [用户问题]: 统计2023.7.12-2025.6.15，赛季bp道具皮肤的使用情况。
 输出：道具id、赛季名称、当前赛季使用人数、当前赛季购买人数  
 [涉及表名]: ['dwd_argothek_playerloadout_expressions_hi', 'dwd_argothek_playerloadout_hi', 'dwd_argothek_playerloadout_sprayslots_hi', 'dwd_argothek_commercialization_gearid_df', 'dim_argothek_seasondate_df'] 

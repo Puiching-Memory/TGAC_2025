@@ -6,7 +6,11 @@ import json
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional
 
-from vanna.integrations.chromadb import ChromaAgentMemory
+from vanna.integrations.chromadb import (
+    ChromaAgentMemory,
+    create_sentence_transformer_embedding_function,
+    get_device,
+)
 from vanna.core.user import User
 from vanna.core.tool.models import ToolContext
 
@@ -30,6 +34,40 @@ def _load_dataset() -> List[Dict[str, Any]]:
     if not isinstance(payload, list):
         raise ValueError("Dataset payload is not a list")
     return payload
+
+
+def _create_embedding_function() -> Optional[Any]:
+    try:
+        device = get_device()
+        embedding_fn = create_sentence_transformer_embedding_function(
+            model_name=EMBEDDING_MODEL,
+            device=device,
+        )
+        print(
+            f"Embedding function ready on device='{device}' model='{EMBEDDING_MODEL}'",
+            flush=True,
+        )
+        return embedding_fn
+    except ImportError:
+        print(
+            "sentence-transformers not available; using default Chroma embeddings",
+            flush=True,
+        )
+    except Exception as exc:
+        print(
+            f"Failed to initialize GPU embedding model '{EMBEDDING_MODEL}': {exc}",
+            flush=True,
+        )
+    return None
+
+
+def _create_agent_memory() -> ChromaAgentMemory:
+    embedding_fn = _create_embedding_function()
+    return ChromaAgentMemory(
+        collection_name=COLLECTION_NAME,
+        persist_directory=PERSIST_DIR,
+        embedding_function=embedding_fn,
+    )
 
 
 def _iterate_with_progress(items: List[Any], description: str) -> Iterable[Any]:
@@ -291,11 +329,7 @@ async def _ingest_ckpt_history(
 async def ingest() -> None:
     dataset = _load_dataset()
     dataset_index = _build_dataset_index(dataset)
-    agent_memory = ChromaAgentMemory(
-        collection_name=COLLECTION_NAME,
-        persist_directory=PERSIST_DIR,
-        embedding_model=EMBEDDING_MODEL,
-    )
+    agent_memory = _create_agent_memory()
 
     golden_count = await _ingest_golden_sql(agent_memory, dataset)
     ckpt_count = await _ingest_ckpt_history(agent_memory, dataset_index)
