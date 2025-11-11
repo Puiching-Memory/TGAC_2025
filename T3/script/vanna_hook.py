@@ -10,25 +10,101 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from vanna.core.tool.models import ToolContext, ToolResult
+from vanna.core.lifecycle import LifecycleHook
+from vanna.core.storage import Conversation
 from vanna.tools import RunSqlTool
 from vanna.capabilities.sql_runner import RunSqlToolArgs
+
+
+SQL_ID_REGISTRY: Dict[str, str] = {}
+
+
+def _sanitize_identifier(value: str, default: str = "unknown") -> str:
+    value = (value or "").strip()
+    if not value:
+        return default
+    sanitized = re.sub(r"[^\w\-]+", "_", value)
+    sanitized = sanitized.strip("_")
+    return sanitized or default
+
+
+def _extract_sql_id_from_text(text: str) -> Optional[str]:
+    if not isinstance(text, str):
+        return None
+    match = re.search(r"(sql_\d+)", text, re.IGNORECASE)
+    if match:
+        return match.group(1).lower()
+    return None
+
+
+def _resolve_sql_id(
+    conversation_id: str,
+    metadata: Optional[Dict[str, Any]] = None,
+    sql_text: Optional[str] = None,
+) -> str:
+    metadata = metadata or {}
+    candidate_keys = (
+        "sql_id",
+        "conversation_sql_id",
+        "task_id",
+        "task_name",
+        "identifier",
+    )
+    for key in candidate_keys:
+        value = metadata.get(key)
+        if isinstance(value, str) and value.strip():
+            return _sanitize_identifier(value)
+
+    for source in (conversation_id, sql_text or ""):
+        sql_id = _extract_sql_id_from_text(source)
+        if sql_id:
+            return _sanitize_identifier(sql_id)
+
+    stem = Path(conversation_id).stem if conversation_id else ""
+    if stem:
+        return _sanitize_identifier(stem)
+
+    return "unknown"
+
+
+def _lookup_sql_id_from_conversation(conversation: Conversation) -> str:
+    for message in reversed(conversation.messages):
+        if message.metadata:
+            for key in ("sql_id", "conversation_sql_id", "task_id", "task_name"):
+                value = message.metadata.get(key)
+                if isinstance(value, str) and value.strip():
+                    return _sanitize_identifier(value)
+        sql_id = _extract_sql_id_from_text(message.content or "")
+        if sql_id:
+            return _sanitize_identifier(sql_id)
+    return _resolve_sql_id(conversation.id)
 
 
 class TGACRunSqlTool(RunSqlTool):
     """Extend the stock run_sql tool so we can retain the executed SQL string and results."""
 
-    def __init__(self, output_path: Optional[str] = None, **kwargs):
+    def __init__(
+        self,
+        output_path: Optional[str] = None,
+        output_text_dir: Optional[str] = None,
+        **kwargs,
+    ):
         """
         Initialize TGACRunSqlTool with optional output path for saving results.
         
         Args:
             output_path: Path to JSON file where SQL execution results will be saved.
                         If None, results will not be saved automatically.
+            output_text_dir: Directory where plain-text summaries of results will be stored.
+                        Each conversation will be saved as <sql_id>.txt. Optional.
         """
         super().__init__(**kwargs)
         self._output_path = Path(output_path).resolve() if output_path else None
         if self._output_path:
             self._output_path.parent.mkdir(parents=True, exist_ok=True)
+        self._output_text_dir = Path(output_text_dir).resolve() if output_text_dir else None
+        if self._output_text_dir:
+            self._output_text_dir.mkdir(parents=True, exist_ok=True)
         self._lock = asyncio.Lock()
 
     async def execute(self, context: ToolContext, args: RunSqlToolArgs) -> ToolResult:
@@ -88,19 +164,21 @@ class TGACRunSqlTool(RunSqlTool):
                     result.metadata["diagnostic_suggestions"] = diagnostics.get("suggestions", [])
         
         # Save results immediately after execution
-        if self._output_path:
+        if self._output_path or self._output_text_dir:
             await self._save_result(context, args.sql, result)
         
         return result
 
     async def _save_result(self, context: ToolContext, sql_text: str, result: ToolResult) -> None:
-        """Save SQL execution result to the output file."""
+        """Save SQL execution result to the output file and optional txt summary."""
         try:
             conversation_id = context.conversation_id
-            sql_id = Path(conversation_id).stem
             
             # Extract results from metadata
             metadata = result.metadata or {}
+            sql_id = _resolve_sql_id(conversation_id, metadata, sql_text)
+            metadata["sql_id"] = sql_id
+            SQL_ID_REGISTRY[conversation_id] = sql_id
             raw_results = metadata.get("results")
             
             # Try other possible locations
@@ -127,18 +205,37 @@ class TGACRunSqlTool(RunSqlTool):
                 )
             )
             
+            text_content: Optional[str] = None
+            if hasattr(result, "result_for_llm") and result.result_for_llm:
+                text_content = str(result.result_for_llm)
+            elif cleaned_results is not None:
+                text_content = json.dumps(cleaned_results, ensure_ascii=False, indent=4)
+            elif result.error:
+                text_content = f"执行失败：{result.error}"
+
             # Save to file
             async with self._lock:
-                data = self._load_entries()
-                updated = False
-                for idx, existing in enumerate(data):
-                    if existing.get("sql_id") == sql_id:
-                        data[idx] = entry
-                        updated = True
-                        break
-                if not updated:
-                    data.append(entry)
-                self._write_entries(data)
+                if self._output_path:
+                    data = self._load_entries()
+                    updated = False
+                    for idx, existing in enumerate(data):
+                        if existing.get("sql_id") == sql_id:
+                            data[idx] = entry
+                            updated = True
+                            break
+                    if not updated:
+                        data.append(entry)
+                    self._write_entries(data)
+
+                if self._output_text_dir and text_content is not None:
+                    txt_path = self._output_text_dir / f"{sql_id}.txt"
+                    existing = ""
+                    if txt_path.exists():
+                        existing = txt_path.read_text(encoding="utf-8").strip()
+                    combined = text_content.strip()
+                    if existing:
+                        combined = f"{existing}\n\n=== 工具执行输出 ===\n{combined}"
+                    txt_path.write_text(combined + "\n", encoding="utf-8")
                 
             if result.success and cleaned_results is not None:
                 print(f"[TGACRunSqlTool] Saved result for sql_id={sql_id} ({len(cleaned_results)} rows)")
@@ -716,3 +813,53 @@ class TGACRunSqlTool(RunSqlTool):
         
         return "\n".join(messages) if messages else "查询返回 0 行，请检查查询逻辑是否正确。"
 
+
+class FinalResponseSaverHook(LifecycleHook):
+    """在消息结束后保存 Agent 最终输出。"""
+
+    def __init__(self, output_dir: Optional[str]):
+        self._output_dir = Path(output_dir).resolve() if output_dir else None
+        if self._output_dir:
+            self._output_dir.mkdir(parents=True, exist_ok=True)
+        self._lock = asyncio.Lock()
+
+    async def after_message(self, conversation: Conversation) -> None:  # type: ignore[override]
+        if not self._output_dir:
+            return
+
+        if not conversation.messages:
+            return
+
+        # 找到最后一条助手回复
+        last_assistant = None
+        for message in reversed(conversation.messages):
+            if message.role == "assistant" and message.content:
+                last_assistant = message
+                break
+
+        if not last_assistant:
+            return
+
+        content = last_assistant.content.strip()
+        if not content:
+            return
+
+        sql_id = SQL_ID_REGISTRY.get(conversation.id)
+        if not sql_id:
+            sql_id = _lookup_sql_id_from_conversation(conversation)
+            SQL_ID_REGISTRY[conversation.id] = sql_id
+
+        file_path = self._output_dir / f"{sql_id}.txt"
+
+        async with self._lock:
+            existing = ""
+            if file_path.exists():
+                existing = file_path.read_text(encoding="utf-8").strip()
+
+            final_section = f"=== 最终总结 ===\n{content}"
+            if existing:
+                combined = f"{existing}\n\n{final_section}"
+            else:
+                combined = final_section
+
+            file_path.write_text(combined + "\n", encoding="utf-8")

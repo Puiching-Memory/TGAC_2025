@@ -4,20 +4,6 @@
 ## 用户问题
 统计2018年注册且近30天有活跃用户，并且在2020年9月到22年4月期间添加过好友的用户，每个月人均在线好友数
 输出：自然月（YYYYMM），人均在线好友数
-## 涉及表名
-`dws_jordass_login_df`, `dwd_jordass_playerlogin_hi`, `dwd_jordass_friendlist_hi`
-## 提示信息
+
+【任务补充】
 添加过好友：type=2
-## 失败案例参考
-以下案例曾出现过错误，请避免类似问题：
-### 失败案例 1
-- **SQL ID**: `sql_84`
-- **来源**: CKPT `V7.1_22.09_1108`
-
-**错误SQL:**
-
-```sql
-SELECT month, AVG(avg_friends) AS avg_online_friends FROM (SELECT f.vplayerid, SUBSTR(f.dteventtime, 1, 7) AS month, AVG(f.num) AS avg_friends FROM dwd_jordass_friendlist_hi f JOIN dws_jordass_login_df l ON f.vplayerid = l.vplayerid WHERE l.dregdate LIKE '2018%' AND f.dteventtime >= '2020-09-01' AND f.dteventtime < '2022-05-01' AND f.type = 2 GROUP BY f.vplayerid, month) t GROUP BY month ORDER BY month
-```
-
-> **错误原因**: 结果与预期不匹配

@@ -4,9 +4,8 @@
 ## 用户问题
 统计全平台20250225存量用户的类型（近三个月流失，近三个月活跃但近三个月无付费，近三个月活跃且有付费），历史段位，历史付费分层情况
 	输出：用户类型，历史段位，历史付费分层，人数
-## 涉及表名
-`dws_jordass_login_df`, `dws_jordass_water_di`, `dws_jordass_uid_login_df`, `dws_jordass_water_df`
-## 提示信息
+
+【任务补充】
 付费分层：
 		0 
 		(0-1200]
@@ -14,52 +13,3 @@
 		(6000-18000]
 		(18000+]
 历史段位：MAX(historymaxsegment)
-## 失败案例参考
-以下案例曾出现过错误，请避免类似问题：
-### 失败案例 1
-- **SQL ID**: `sql_116`
-- **来源**: CKPT `V7.1_22.09_1108`
-
-**错误SQL:**
-
-```sql
-SELECT 
-    CASE 
-        WHEN SUBSTR(cbitmap, 1, 90) REGEXP '^0+$' THEN '近三个月流失'
-        WHEN SUBSTR(cbitmap, 1, 90) REGEXP '1' AND SUM_pay_last_90d = 0 THEN '近三个月活跃但近三个月无付费'
-        WHEN SUBSTR(cbitmap, 1, 90) REGEXP '1' AND SUM_pay_last_90d > 0 THEN '近三个月活跃且有付费'
-    END AS user_type,
-    historymaxsegment,
-    CASE
-        WHEN SUM_pay_all_time = 0 THEN '0'
-        WHEN SUM_pay_all_time > 0 AND SUM_pay_all_time <= 1200 THEN '(0-1200]'
-        WHEN SUM_pay_all_time > 1200 AND SUM_pay_all_time <= 6000 THEN '(1200-6000]'
-        WHEN SUM_pay_all_time > 6000 AND SUM_pay_all_time <= 18000 THEN '(6000-18000]'
-        WHEN SUM_pay_all_time > 18000 THEN '(18000+]'
-    END AS pay_tier,
-    COUNT(*) AS user_count
-FROM (
-    SELECT 
-        l.vplayerid,
-        l.cbitmap,
-        l.historymaxsegment,
-        COALESCE(SUM(w.imoney), 0) AS SUM_pay_last_90d,
-        COALESCE(SUM_ALL.imoney_all, 0) AS SUM_pay_all_time
-    FROM dws_jordass_uid_login_df l
-    LEFT JOIN dws_jordass_water_df w 
-        ON l.vplayerid = w.vplayerid 
-        AND w.dtstatdate >= DATE_SUB('20250225', INTERVAL 89 DAY)
-        AND w.dtstatdate <= '20250225'
-    LEFT JOIN (
-        SELECT vplayerid, SUM(imoney) AS imoney_all
-        FROM dws_jordass_water_df
-        GROUP BY vplayerid
-    ) SUM_ALL ON l.vplayerid = SUM_ALL.vplayerid
-    WHERE l.dtstatdate = '20250225'
-    GROUP BY l.vplayerid, l.cbitmap, l.historymaxsegment, SUM_ALL.imoney_all
-) t
-GROUP BY user_type, historymaxsegment, pay_tier
-ORDER BY user_type, historymaxsegment, pay_tier;
-```
-
-> **错误原因**: 结果与预期不匹配

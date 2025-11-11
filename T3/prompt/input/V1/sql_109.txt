@@ -2,26 +2,12 @@
 
 # SQL生成任务
 ## 用户问题
- 统计 20250424-20250508 期间 传统和休闲的胜利情况
+统计 20250424-20250508 期间 传统和休闲的胜利情况
 
  胜利数分布层次：1,2-10,11-20,21-50,51-80,81-100，101-200,201-500,501以上
  输出：胜利数分布层次，人数
-## 涉及表名
-`dwd_jordass_roundlog_funnymode_hi`, `dwd_jordass_roundflow_hi`
-## 提示信息
- 传统模式： mode in(101,102,103,401,402,403)
+
+【任务补充】
+传统模式： mode in(101,102,103,401,402,403)
  休闲：mode in(201,202,203,601,602,603) 
- 胜利：teamrank =1 
-## 失败案例参考
-以下案例曾出现过错误，请避免类似问题：
-### 失败案例 1
-- **SQL ID**: `sql_109`
-- **来源**: CKPT `V7.1_22.09_1108`
-
-**错误SQL:**
-
-```sql
-SELECT '1' as win_range, COUNT(DISTINCT vplayerid) as player_count FROM dwd_jordass_roundflow_hi WHERE tdbank_imp_date BETWEEN '20250424' AND '20250508' AND mode IN (201,202,203,601,602,603) AND teamrank = 1 UNION ALL SELECT '2-10' as win_range, COUNT(*) as player_count FROM (SELECT vplayerid FROM dwd_jordass_roundflow_hi WHERE tdbank_imp_date BETWEEN '20250424' AND '20250508' AND mode IN (201,202,203,601,602,603) AND teamrank = 1 GROUP BY vplayerid HAVING SUM(CASE WHEN teamrank = 1 THEN 1 ELSE 0 END) BETWEEN 2 AND 10) t UNION ALL SELECT '11-20' as win_range, COUNT(*) as player_count FROM (SELECT vplayerid FROM dwd_jordass_roundflow_hi WHERE tdbank_imp_date BETWEEN '20250424' AND '20250508' AND mode IN (201,202,203,601,602,603) AND teamrank = 1 GROUP BY vplayerid HAVING SUM(CASE WHEN teamrank = 1 THEN 1 ELSE 0 END) BETWEEN 11 AND 20) t UNION ALL SELECT '21-50' as win_range, COUNT(*) as player_count FROM (SELECT vplayerid FROM dwd_jordass_roundflow_hi WHERE tdbank_imp_date BETWEEN '20250424' AND '20250508' AND mode IN (201,202,203,601,602,603) AND teamrank = 1 GROUP BY vplayerid HAVING SUM(CASE WHEN teamrank = 1 THEN 1 ELSE 0 END) BETWEEN 21 AND 50) t UNION ALL SELECT '51-80' as win_range, COUNT(*) as player_count FROM (SELECT vplayerid FROM dwd_jordass_roundflow_hi WHERE tdbank_imp_date BETWEEN '20250424' AND '20250508' AND mode IN (201,202,203,601,602,603) AND teamrank = 1 GROUP BY vplayerid HAVING SUM(CASE WHEN teamrank = 1 THEN 1 ELSE 0 END) BETWEEN 51 AND 80) t UNION ALL SELECT '81-100' as win_range, COUNT(*) as player_count FROM (SELECT vplayerid FROM dwd_jordass_roundflow_hi WHERE tdbank_imp_date BETWEEN '20250424' AND '20250508' AND mode IN (201,202,203,601,602,603) AND teamrank = 1 GROUP BY vplayerid HAVING SUM(CASE WHEN teamrank = 1 THEN 1 ELSE 0 END) BETWEEN 81 AND 100) t UNION ALL SELECT '101-200' as win_range, COUNT(*) as player_count FROM (SELECT vplayerid FROM dwd_jordass_roundflow_hi WHERE tdbank_imp_date BETWEEN '20250424' AND '20250508' AND mode IN (201,202,203,601,602,603) AND teamrank = 1 GROUP BY vplayerid HAVING SUM(CASE WHEN teamrank = 1 THEN 1 ELSE 0 END) BETWEEN 101 AND 200) t UNION ALL SELECT '201-500' as win_range, COUNT(*) as player_count FROM (SELECT vplayerid FROM dwd_jordass_roundflow_hi WHERE tdbank_imp_date BETWEEN '20250424' AND '20250508' AND mode IN (201,202,203,601,602,603) AND teamrank = 1 GROUP BY vplayerid HAVING SUM(CASE WHEN teamrank = 1 THEN 1 ELSE 0 END) BETWEEN 201 AND 500) t UNION ALL SELECT '501以上' as win_range, COUNT(*) as player_count FROM (SELECT vplayerid FROM dwd_jordass_roundflow_hi WHERE tdbank_imp_date BETWEEN '20250424' AND '20250508' AND mode IN (201,202,203,601,602,603) AND teamrank = 1 GROUP BY vplayerid HAVING SUM(CASE WHEN teamrank = 1 THEN 1 ELSE 0 END) > 500) t
-```
-
-> **错误原因**: 结果与预期不匹配
+ 胜利：teamrank =1

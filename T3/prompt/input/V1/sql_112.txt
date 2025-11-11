@@ -4,20 +4,6 @@
 ## 用户问题
 统计2022.04.23-2022.04.30和2022.05.01-2022.05.08传统模式存活时长达到90分钟的玩家人数，每日人数
 输出：统计日期(yyyymmdd)，人数
-## 涉及表名
-`dwd_jordass_roundflow_hi`
-## 提示信息
+
+【任务补充】
 传统模式mode in(101,102,103,401,402,403)
-## 失败案例参考
-以下案例曾出现过错误，请避免类似问题：
-### 失败案例 1
-- **SQL ID**: `sql_112`
-- **来源**: CKPT `V7.1_22.09_1108`
-
-**错误SQL:**
-
-```sql
-SELECT SUBSTR(tdbank_imp_date, 1, 8) AS stat_date, COUNT(DISTINCT vplayerid) AS player_count FROM dwd_jordass_roundflow_hi WHERE mode IN (101,102,103,401,402,403) AND survivaltime >= 5400 AND ((SUBSTR(tdbank_imp_date, 1, 8) >= '20220423' AND SUBSTR(tdbank_imp_date, 1, 8) <= '20220430') OR (SUBSTR(tdbank_imp_date, 1, 8) >= '20220501' AND SUBSTR(tdbank_imp_date, 1, 8) <= '20220508')) GROUP BY SUBSTR(tdbank_imp_date, 1, 8) ORDER BY stat_date
-```
-
-> **错误原因**: 结果与预期不匹配

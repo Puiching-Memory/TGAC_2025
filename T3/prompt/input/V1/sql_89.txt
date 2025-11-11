@@ -4,9 +4,8 @@
 ## 用户问题
 赛季末期（20230529-20230627）的垂类玩法轻中重度及垂类独占用户，从3.22-6.27的，每周砺刃登录天数 和 垂类玩法参与局数和天数分布
 输出：周期（7天为一个周期），活跃度，活跃天数，人数
-## 涉及表名
-`dws_jordass_login_di`, `dws_jordass_mode_roundrecord_di`
-## 提示信息
+
+【任务补充】
 垂类玩法轻中重度用户划分条件：
  when active_days between 1 and 4 then '轻度'
  when active_days between 5 and 15 then '中度'
@@ -14,79 +13,3 @@
 垂类独占用户筛选逻辑:
 至少玩过submode IN (1265972235155284992,1278160113246405632)模式一次且没玩过其他任何模式的用户（注意submode可为空的情况）
 垂类玩法： modename = '乐园' and submode IN (1265972235155284992,1278160113246405632
-## 失败案例参考
-以下案例曾出现过错误，请避免类似问题：
-### 失败案例 1
-- **SQL ID**: `sql_89`
-- **来源**: CKPT `V7.1_22.09_1108`
-
-**错误SQL:**
-
-```sql
-WITH period_login AS (
-    SELECT 
-        vplayerid,
-        COUNT(*) as login_days
-    FROM dws_jordass_login_di 
-    WHERE dtstatdate BETWEEN '20230322' AND '20230627'
-    GROUP BY vplayerid
-),
-mode_participation AS (
-    SELECT 
-        vplayerid,
-        SUM(roundcnt) as total_rounds,
-        COUNT(*) as participation_days
-    FROM dws_jordass_mode_roundrecord_di 
-    WHERE modename = '乐园' 
-      AND submode IN (1265972235155284992, 1278160113246405632)
-      AND dtstatdate BETWEEN '20230322' AND '20230627'
-    GROUP BY vplayerid
-),
-all_players AS (
-    SELECT p.vplayerid, COALESCE(l.login_days, 0) as login_days, COALESCE(p.participation_days, 0) as participation_days, COALESCE(p.total_rounds, 0) as total_rounds
-    FROM mode_participation p
-    LEFT JOIN period_login l ON p.vplayerid = l.vplayerid
-),
-exclusive_check AS (
-    SELECT 
-        ap.vplayerid,
-        ap.login_days,
-        ap.participation_days,
-        ap.total_rounds,
-        COUNT(DISTINCT CASE WHEN m.modename != '乐园' OR (m.modename = '乐园' AND m.submode NOT IN (1265972235155284992, 1278160113246405632)) THEN 1 ELSE NULL END) as other_mode_count
-    FROM all_players ap
-    LEFT JOIN dws_jordass_mode_roundrecord_di m ON ap.vplayerid = m.vplayerid AND m.dtstatdate BETWEEN '20230322' AND '20230627'
-    GROUP BY ap.vplayerid, ap.login_days, ap.participation_days, ap.total_rounds
-),
-filtered_exclusive AS (
-    SELECT *
-    FROM exclusive_check
-    WHERE other_mode_count = 0 OR other_mode_count IS NULL
-),
-weekly_data AS (
-    SELECT 
-        vplayerid,
-        login_days,
-        participation_days,
-        total_rounds,
-        FLOOR((ROW_NUMBER() OVER (ORDER BY vplayerid) - 1) / 7) + 1 as week_period
-    FROM filtered_exclusive
-),
-final_stats AS (
-    SELECT 
-        week_period,
-        CASE 
-            WHEN login_days BETWEEN 1 AND 4 THEN 'light'
-            WHEN login_days BETWEEN 5 AND 15 THEN 'medium'
-            WHEN login_days BETWEEN 16 AND 30 THEN 'heavy'
-            ELSE 'unknown'
-        END as activity_level,
-        login_days,
-        COUNT(*) as user_count
-    FROM weekly_data
-    GROUP BY week_period, activity_level, login_days
-)
-SELECT week_period, activity_level, login_days, user_count FROM final_stats ORDER BY week_period, activity_level;
-```
-
-> **错误原因**: 结果与预期不匹配

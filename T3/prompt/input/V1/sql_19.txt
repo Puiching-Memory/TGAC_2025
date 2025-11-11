@@ -13,42 +13,9 @@
 日活跃中仅玩以上三个模式不玩其他模式的玩家数
 日活跃中仅玩以上三个模式不玩其他模式的玩家周活跃频次
 
-## 涉及表名
-`dws_argothek_oss_login_di`, `dwd_argothek_playermatchstats_hi`, `dim_argothek_gplayerid_vroleid_df`
-## 提示信息
+【任务补充】
 仅玩单一模式逻辑：
 having count(distinct queueid) = 1 -- 只玩一个模式
 and max(queueid) = "xxx" -- 模式ID为RushMode
 用户角色映射逻辑：
 iareaid = "101"
-## 失败案例参考
-以下案例曾出现过错误，请避免类似问题：
-### 失败案例 1
-- **SQL ID**: `sql_19`
-- **来源**: CKPT `V7.1_22.09_1108`
-
-**错误SQL:**
-
-```sql
-SELECT AVG(weekly_play_count) as avg_weekly_frequency FROM (
-    SELECT 
-        t1.iuserid,
-        SUM(CASE WHEN match_stats.queueid IN ('QuickMatch', 'RushMode', 'CombatArena') THEN 1 ELSE 0 END) as weekly_play_count
-    FROM (
-        SELECT b.iuserid
-        FROM dwd_argothek_playermatchstats_hi a
-        JOIN dim_argothek_gplayerid_vroleid_df b ON a.vroleid = b.vroleid
-        WHERE a.dteventtime LIKE '2025-05-02%' 
-          AND b.dtstatdate = '20250502'
-        GROUP BY b.iuserid
-        HAVING COUNT(DISTINCT a.queueid) = 1 
-           AND MIN(a.queueid) IN ('QuickMatch', 'RushMode', 'CombatArena')
-    ) t1
-    JOIN dim_argothek_gplayerid_vroleid_df role_map ON t1.iuserid = role_map.iuserid AND role_map.dtstatdate = '20250502'
-    JOIN dwd_argothek_playermatchstats_hi match_stats ON role_map.vroleid = match_stats.vroleid
-    WHERE match_stats.dteventtime >= '2025-04-26' AND match_stats.dteventtime < '2025-05-03'
-    GROUP BY t1.iuserid
-) subquery
-```
-
-> **错误原因**: 结果与预期不匹配

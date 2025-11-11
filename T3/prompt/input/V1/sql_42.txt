@@ -4,38 +4,3 @@
 ## 用户问题
 统计2021.11.1-2021.11.30每天按extarg2中用"_"分割的第2位的值包含(8,16,17)看点击情况
 输出：日期，按extarg2中用"_"分割的第2位，人数，次数
-## 涉及表名
-`dws_jordass_buttonpress_pre_di`
-## 成功案例参考
-以下案例执行成功，可作为参考：
-### 成功案例 1
-- **SQL ID**: `sql_42`
-- **得分**: 1
-- **来源**: CKPT `V7.1_22.09_1108`
-
-**SQL:**
-
-```sql
-SELECT dtstatdate, SPLIT_PART(extarg2, '_', 2) AS part2, COUNT(DISTINCT uid) AS persons, COUNT(*) AS clicks FROM dws_jordass_buttonpress_pre_di WHERE dtstatdate BETWEEN '20211101' AND '20211130' AND SPLIT_PART(extarg2, '_', 2) IN ('8', '16', '17') GROUP BY dtstatdate, part2 ORDER BY dtstatdate, part2
-```
----
-### 成功案例 2
-- **SQL ID**: `sql_42`
-- **得分**: 1
-- **来源**: CKPT `V6_31.40_1105`
-
-**SQL:**
-
-```sql
-SELECT 
-    dtstatdate,
-    split_part(extarg2, '_', 2) AS extarg2_part2,
-    COUNT(DISTINCT vplayerid) AS 人数,
-    COUNT(*) AS 次数
-FROM dws_jordass_buttonpress_pre_di
-WHERE dtstatdate >= '20211101' 
-    AND dtstatdate <= '20211130'
-    AND split_part(extarg2, '_', 2) IN ('8', '16', '17')
-GROUP BY dtstatdate, split_part(extarg2, '_', 2)
-ORDER BY dtstatdate, extarg2_part2
-```

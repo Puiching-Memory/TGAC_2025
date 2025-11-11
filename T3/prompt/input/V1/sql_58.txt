@@ -11,48 +11,4 @@
 
 对局时长按照 [0-10min)，[10-30min)，[30min-1h)，[1h,2h)，[2h,3h)，[3h,4h)， [4h,5h)，
 [5h,6h)，[6h,7h)，[7h,8h)，[8h,9h)，[9h,10h)，[10h,∞)		
-输出字段：玩法id、对局时长、人数  
-## 涉及表名
-`dws_jordass_matchlog_stat_di`
-## 失败案例参考
-以下案例曾出现过错误，请避免类似问题：
-### 失败案例 1
-- **SQL ID**: `sql_58`
-- **来源**: CKPT `V7.1_22.09_1108`
-
-**错误SQL:**
-
-```sql
-SELECT
-    imode AS 玩法id,
-    CASE
-        WHEN itemp1 >= 0 AND itemp1 < 600 THEN '[0-10min)'
-        WHEN itemp1 >= 600 AND itemp1 < 1800 THEN '[10-30min)'
-        WHEN itemp1 >= 1800 AND itemp1 < 3600 THEN '[30min-1h)'
-        WHEN itemp1 >= 3600 AND itemp1 < 7200 THEN '[1h,2h)'
-        WHEN itemp1 >= 7200 AND itemp1 < 10800 THEN '[2h,3h)'
-        WHEN itemp1 >= 10800 AND itemp1 < 14400 THEN '[3h,4h)'
-        WHEN itemp1 >= 14400 AND itemp1 < 18000 THEN '[4h,5h)'
-        WHEN itemp1 >= 18000 AND itemp1 < 21600 THEN '[5h,6h)'
-        WHEN itemp1 >= 21600 AND itemp1 < 25200 THEN '[6h,7h)'
-        WHEN itemp1 >= 25200 AND itemp1 < 28800 THEN '[7h,8h)'
-        WHEN itemp1 >= 28800 AND itemp1 < 32400 THEN '[8h,9h)'
-        WHEN itemp1 >= 32400 AND itemp1 < 36000 THEN '[9h,10h)'
-        WHEN itemp1 >= 36000 THEN '[10h,∞)'
-    END AS 对局时长,
-    COUNT(*) AS 人数
-FROM dws_jordass_matchlog_stat_di
-WHERE imode IN (1310822585431254784, 1282371711108385024, 1287652322611036928, 1294211358396518400, 1297394991875754752)
-  AND dtstatdate BETWEEN '20221116' AND '20230723'
-  AND (
-    (imode = 1310822585431254784 AND dtstatdate BETWEEN '20230717' AND '20230723') OR
-    (imode = 1282371711108385024 AND dtstatdate BETWEEN '20221116' AND '20221122') OR
-    (imode = 1287652322611036928 AND dtstatdate BETWEEN '20221123' AND '20221129') OR
-    (imode = 1294211358396518400 AND dtstatdate BETWEEN '20230301' AND '20230307') OR
-    (imode = 1297394991875754752 AND dtstatdate BETWEEN '20230607' AND '20230613')
-  )
-GROUP BY imode, 对局时长
-ORDER BY imode, 对局时长
-```
-
-> **错误原因**: 结果与预期不匹配
+输出字段：玩法id、对局时长、人数

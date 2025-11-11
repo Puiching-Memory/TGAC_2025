@@ -7,10 +7,10 @@
 
 参与率：玩法参与用户数 / 活跃用户数
 周平均日均参与场次：每天不同玩法平均对局数再按周求平均
-## 涉及表名
-`dws_jordass_login_di`, `dws_jordass_mode_roundrecord_di`
-## 提示信息
+
+【任务补充】
 自然周指周一到周日的完整周期，通常以周一作为起始日
+
 玩法：从上往下匹配，如果满足任一条件则返回对应的玩法名称，否则返回“其他模式”。
 如果模式为“传统模式”，且子模式名称以“CG”开头，且地图为“群屿”，则返回“主题群屿”；
 如果模式为“传统模式”且地图为“群屿”，则返回“传统群屿”；
@@ -24,67 +24,3 @@
 如果模式是“领地”，则返回“领地”；
 如果模式是“广阔天地”，则返回“广阔天地”
 如果模式是“生存模式”，则返回“隧道”。
-## 失败案例参考
-以下案例曾出现过错误，请避免类似问题：
-### 失败案例 1
-- **SQL ID**: `sql_29`
-- **来源**: CKPT `V7.1_22.09_1108`
-
-**错误SQL:**
-
-```sql
-WITH mode_daily AS (
-    SELECT
-        STR_TO_DATE(dtstatdate, '%Y%m%d') AS stat_date,
-        CASE
-            WHEN modename = '传统模式' AND submodename LIKE 'CG%' AND mapname = '群屿' THEN '主题群屿'
-            WHEN modename = '传统模式' AND mapname = '群屿' THEN '传统群屿'
-            WHEN modename = '传统模式' AND mapname = '假日群岛' THEN '假日群岛'
-            WHEN modename = '传统模式' AND mapname = '荣耀之城' THEN '荣耀之城'
-            WHEN submodename = '广域战场模式' THEN '广域战场'
-            WHEN submodename = '极能形态模式' THEN '极能形态'
-            WHEN modename = '组队竞技' THEN '组竞'
-            WHEN modename = '休闲模式' THEN '休闲'
-            WHEN modename = '乐园' THEN '乐园'
-            WHEN modename = '领地' THEN '领地'
-            WHEN modename = '广阔天地' THEN '广阔天地'
-            WHEN modename = '生存模式' THEN '隧道'
-            ELSE '其他模式'
-        END AS gameplay_category,
-        COUNT(DISTINCT vplayerid) AS daily_participating_users,
-        SUM(roundcnt) AS daily_rounds
-    FROM dws_jordass_mode_roundrecord_di
-    WHERE dtstatdate BETWEEN '20240618' AND '20250330'
-    GROUP BY stat_date, gameplay_category
-),
-login_daily AS (
-    SELECT
-        STR_TO_DATE(dtstatdate, '%Y%m%d') AS stat_date,
-        COUNT(DISTINCT vplayerid) AS daily_active_users
-    FROM dws_jordass_login_di
-    WHERE dtstatdate BETWEEN '20240618' AND '20250330'
-    GROUP BY stat_date
-),
-weekly_data AS (
-    SELECT
-        YEARWEEK(md.stat_date, 1) AS yearweek,
-        DATE_SUB(md.stat_date, INTERVAL (DAYOFWEEK(md.stat_date) - 2) DAY) AS week_start_monday,
-        md.gameplay_category,
-        AVG(md.daily_participating_users) AS avg_daily_participating_users,
-        AVG(md.daily_rounds) AS avg_daily_rounds,
-        AVG(ld.daily_active_users) AS avg_weekly_active_users
-    FROM mode_daily md
-    JOIN login_daily ld ON md.stat_date = ld.stat_date
-    GROUP BY yearweek, week_start_monday, md.gameplay_category
-)
-SELECT
-    DATE_FORMAT(week_start_monday, '%Y%m%d') AS natural_week,
-    gameplay_category AS gameplay_name,
-    ROUND(avg_daily_participating_users, 2) AS weekly_avg_daily_participating_users,
-    ROUND(avg_daily_participating_users / avg_weekly_active_users, 4) AS weekly_avg_daily_participation_rate,
-    ROUND(avg_daily_rounds, 2) AS weekly_avg_daily_participation_rounds
-FROM weekly_data
-ORDER BY natural_week, gameplay_name
-```
-
-> **错误原因**: 结果与预期不匹配

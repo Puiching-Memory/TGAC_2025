@@ -1,5 +1,5 @@
 # 基本依赖
-pymysql==1.1.2
+pymysql
 # toon_format==0.1.0
 T3/lib/toon-python
 transformers
@@ -11,7 +11,10 @@ sqlalchemy
 llama-index
 
 # datus 依赖
-# datus-agent==0.2.1
+# datus-agent @ git+https://github.com/Datus-ai/Datus-agent.git
+# datus-agent
+# datus-metricflow
+# metricflow
 
 # langchain 依赖
 # langchain==1.0.3
@@ -19,10 +22,15 @@ llama-index
 # langchain-openai==1.0.2
 
 # agentlightning 依赖
-# agentlightning[verl]==0.2.1 # 和 datus-agent 同时安装时有 rich 依赖冲突
+# agentlightning[verl]>=0.2.1 # 用于训练Agent工具调用和推理能力
+# 注意：如果与datus-agent同时安装时有rich依赖冲突，可以尝试：pip install agentlightning[verl] --no-deps && pip install rich
 
 # vanna 依赖
 vanna[fastapi,mysql,openai] @ git+https://github.com/vanna-ai/vanna.git@v2
 # uvicorn[standard] # 可选
 chromadb # 可选，用于持久化存储 Agent Memory
 sentence_transformers # 可选，用于生成 Embedding
+
+# lightrag-hku 依赖
+lightrag-hku[api]
+aiohttp  # LightRAG HTTP API 客户端依赖

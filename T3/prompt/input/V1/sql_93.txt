@@ -4,54 +4,8 @@
 ## 用户问题
 统计2024.1到2024.5每月全平台的新增付费、持续付费和回流付费用户人数
 输出：自然月（202401,...,2024.5），类型（1对应 新增付费用户； 2对应 持续付费用户；3对应 回流付费用户）,人数，付费金额（元）
-## 涉及表名
-`dws_jordass_water_di`, `dws_jordass_water_df`
-## 提示信息
+
+【任务补充】
 当月新增付费用户：用户第一笔支付在这个月
 当月持续付费用户：用户在本月的第一笔支付距离上一笔支付在30天以内
 当月回流付费用户：用户在本月的第一笔支付距离上一笔支付在30天以上
-## 失败案例参考
-以下案例曾出现过错误，请避免类似问题：
-### 失败案例 1
-- **SQL ID**: `sql_93`
-- **来源**: CKPT `V7.1_22.09_1108`
-
-**错误SQL:**
-
-```sql
-WITH player_first_pay AS (
-    SELECT 
-        vplayerid,
-        MIN(SUBSTR(dtstatdate, 1, 6)) AS first_pay_month
-    FROM dws_jordass_water_di
-    GROUP BY vplayerid
-),
-player_last_pay_before_2024 AS (
-    SELECT 
-        vplayerid,
-        MAX(dtstatdate) AS last_pay_date
-    FROM dws_jordass_water_di 
-    WHERE SUBSTR(dtstatdate, 1, 6) < '202401'
-    GROUP BY vplayerid
-)
-SELECT 
-    SUBSTR(t1.dtstatdate, 1, 6) AS month,
-    CASE 
-        WHEN pfp.first_pay_month = SUBSTR(t1.dtstatdate, 1, 6) THEN 1 -- 新增付费
-        WHEN DATEDIFF(
-            STR_TO_DATE(t1.dtstatdate, '%Y%m%d'), 
-            STR_TO_DATE(plp.last_pay_date, '%Y%m%d')
-        ) <= 30 THEN 2 -- 持续付费
-        ELSE 3 -- 回流付费
-    END AS type,
-    COUNT(DISTINCT t1.vplayerid) AS user_count,
-    SUM(t1.imoney) AS total_amount
-FROM dws_jordass_water_di t1
-JOIN player_first_pay pfp ON t1.vplayerid = pfp.vplayerid
-LEFT JOIN player_last_pay_before_2024 plp ON t1.vplayerid = plp.vplayerid
-WHERE SUBSTR(t1.dtstatdate, 1, 6) BETWEEN '202401' AND '202405'
-GROUP BY month, type
-ORDER BY month, type;
-```
-
-> **错误原因**: 结果与预期不匹配

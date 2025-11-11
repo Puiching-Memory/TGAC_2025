@@ -4,18 +4,3 @@
 ## 用户问题
 提取1个抽样号码包，2025.7.17-2025.7.23期间付费且不包含721号码包内的用户全量
 输出:gplayerid。
-## 涉及表名
-`dim_extract_311381_conf`, `dws_argothek_ce1_login_di`, `dws_argothek_ce1_cbt2_vplayerid_suserid_di`
-## 失败案例参考
-以下案例曾出现过错误，请避免类似问题：
-### 失败案例 1
-- **SQL ID**: `sql_2`
-- **来源**: CKPT `V7.1_22.09_1108`
-
-**错误SQL:**
-
-```sql
-SELECT vplayerid FROM dws_argothek_ce1_cbt2_vplayerid_suserid_di WHERE dtstatdate BETWEEN '20250717' AND '20250723' AND vplayerid IS NOT NULL AND vplayerid != '' EXCEPT SELECT vplayerid FROM dim_extract_311381_conf WHERE vplayerid LIKE '%721%' OR vplayerid = 'pkg721'
-```
-
-> **错误原因**: 结果与预期不匹配

@@ -4,43 +4,9 @@
 ## 用户问题
 统计20250226往前180天联盟用户，联盟用户的30天滚动付费人数
 输出：统计日期（YYYYMMDD），联盟并付费的人数
-## 涉及表名
-`dws_jordass_water_di`, `dws_jordass_uid_login_df`, `dwd_jordass_player_allianceactive_hi`
-## 提示信息
+
+【任务补充】
 联盟活跃用户统计日期：
 where tdbank_imp_date>=date_sub("20250226",180) and tdbank_imp_date<"20250226"
 游戏付费流水统计日期：
 where dtstatdate>=date_sub("20250226",210) and dtstatdate<"20250226" and platid=255
-## 失败案例参考
-以下案例曾出现过错误，请避免类似问题：
-### 失败案例 1
-- **SQL ID**: `sql_60`
-- **来源**: CKPT `V7.1_22.09_1108`
-
-**错误SQL:**
-
-```sql
-WITH date_series AS (
-    SELECT DISTINCT dtstatdate
-    FROM dws_jordass_water_di
-    WHERE dtstatdate >= '20240901' AND dtstatdate < '20250226'
-),
-alliance_users AS (
-    SELECT DISTINCT l.vplayerid
-    FROM dwd_jordass_player_allianceactive_hi a
-    JOIN dws_jordass_uid_login_df l ON a.uid = l.uid
-    WHERE a.tdbank_imp_date >= '2024090100' AND a.tdbank_imp_date < '2025022600'
-)
-SELECT 
-    ds.dtstatdate,
-    COUNT(DISTINCT w.vplayerid) AS paid_count
-FROM date_series ds
-JOIN dws_jordass_water_di w ON w.dtstatdate >= DATE_SUB(ds.dtstatdate, INTERVAL 29 DAY)
-    AND w.dtstatdate <= ds.dtstatdate
-    AND w.platid = 255 AND w.iamount > 0
-JOIN alliance_users au ON w.vplayerid = au.vplayerid
-GROUP BY ds.dtstatdate
-ORDER BY ds.dtstatdate;
-```
-
-> **错误原因**: 结果与预期不匹配

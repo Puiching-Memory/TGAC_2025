@@ -4,57 +4,10 @@
 ## 用户问题
 统计2023.7.12-2025.6.15，赛季bp道具皮肤的使用情况。
 输出：道具id、赛季名称、当前赛季使用人数、当前赛季购买人数
-## 涉及表名
-`dwd_argothek_playerloadout_expressions_hi`, `dwd_argothek_playerloadout_hi`, `dwd_argothek_playerloadout_sprayslots_hi`, `dwd_argothek_commercialization_gearid_df`, `dim_argothek_seasondate_df`
-## 提示信息
+
+【任务补充】
 bp枪皮购买逻辑:
 and purchaseSource = "BATTLEPASS_PROGRESS" -- 筛选来源为BATTLEPASS_PROGRESS
 and itemtype = "d5f120f8-ff8c-4aac-92ea-f2b5acbe9475" -- 筛选itemtype为指定值
 枪皮使用逻辑：
 expressionassetid is not null and expressiontypeid = "d5f120f8-ff8c-4aac-92ea-f2b5acbe9475"
-## 失败案例参考
-以下案例曾出现过错误，请避免类似问题：
-### 失败案例 1
-- **SQL ID**: `sql_10`
-- **来源**: CKPT `V7.1_22.09_1108`
-
-**错误SQL:**
-
-```sql
-SELECT 
-    usage.item_id,
-    usage.season_name,
-    usage.current_season_usage_count,
-    COALESCE(purchase.current_season_purchase_count, 0) AS current_season_purchase_count
-FROM (
-    SELECT 
-        de.expressionassetid AS item_id,
-        ds.seasonidname AS season_name,
-        COUNT(DISTINCT de.apeventid) AS current_season_usage_count
-    FROM dwd_argothek_playerloadout_expressions_hi de
-    JOIN dim_argothek_seasondate_df ds ON SUBSTR(de.tdbank_imp_date, 1, 8) = ds.idate
-    WHERE 
-        de.expressionassetid IS NOT NULL 
-        AND de.expressiontypeid = 'd5f120f8-ff8c-4aac-92ea-f2b5acbe9475'
-        AND ds.idate >= '20230712' 
-        AND ds.idate <= '20250615'
-    GROUP BY de.expressionassetid, ds.seasonidname
-) usage
-LEFT JOIN (
-    SELECT 
-        cg.purchaseditemid AS item_id,
-        ds.seasonidname AS season_name,
-        COUNT(DISTINCT cg.vtemp1) AS current_season_purchase_count
-    FROM dwd_argothek_commercialization_gearid_df cg
-    JOIN dim_argothek_seasondate_df ds ON cg.idate = ds.idate
-    WHERE 
-        cg.purchasesource = 'BATTLEPASS_PROGRESS'
-        AND cg.itemtype = 'd5f120f8-ff8c-4aac-92ea-f2b5acbe9475'
-        AND cg.idate >= '20230712' 
-        AND cg.idate <= '20250615'
-    GROUP BY cg.purchaseditemid, ds.seasonidname
-) purchase
-ON usage.item_id = purchase.item_id AND usage.season_name = purchase.season_name
-```
-
-> **错误原因**: 结果与预期不匹配

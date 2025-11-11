@@ -19,9 +19,7 @@ a9126263-439c-7be6-d668-52a6c0c0a36f
 041a43a4-46fe-dab7-c974-36bf91eab33d
 5b863cb9-4e41-ec89-69ee-49a223d05ff1
 
-## 涉及表名
-`dwd_argothek_gearrecord_df`, `dws_argothek_oss_useractivity_df`
-## 提示信息
+【任务补充】
 这张表的iworldid = 255代表玩家粒度， 奖池道具筛选逻辑：
 iGoodsId in (
 "71d260ca-4bad-81f2-0298-44860341a7a6",
@@ -35,16 +33,3 @@ iGoodsId in (
 "3abc330f-444a-6dfd-5863-81856ba62624",
 "041a43a4-46fe-dab7-c974-36bf91eab33d",
 "5b863cb9-4e41-ec89-69ee-49a223d05ff1"
-## 失败案例参考
-以下案例曾出现过错误，请避免类似问题：
-### 失败案例 1
-- **SQL ID**: `sql_11`
-- **来源**: CKPT `V7.1_22.09_1108`
-
-**错误SQL:**
-
-```sql
-SELECT COUNT(*) AS players_with_all_items_count FROM (SELECT iuserid FROM dwd_argothek_gearrecord_df WHERE igoodsid IN ('71d260ca-4bad-81f2-0298-44860341a7a6', '48601754-442d-98cb-2109-3fb2075500ec', 'a9126263-439c-7be6-d668-52a6c0c0a36f', '34ecc788-4034-71d2-a0ac-c398b8ecb2ae', '56f98991-43f8-dcc8-189e-08b7ae6c42ad', '8453f8ef-4c0b-46e2-8768-3e9e45c67a2c', '06d90274-435f-3e32-9d57-26bc228ae2e5', '8196dea4-4229-c951-13a9-088fb13b3512', '3abc330f-444a-6dfd-5863-81856ba62624', '041a43a4-46fe-dab7-c974-36bf91eab33d', '5b863cb9-4e41-ec89-69ee-49a223d05ff1') AND dtstatdate >= '20250518' AND dtstatdate <= '20250617' GROUP BY iuserid HAVING COUNT(DISTINCT igoodsid) = 11) t
-```
-
-> **错误原因**: 结果与预期不匹配

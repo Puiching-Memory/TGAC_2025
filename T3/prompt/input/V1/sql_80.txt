@@ -4,11 +4,11 @@
 ## 用户问题
 统计：2024.10.2-2025.1.8内，每七天为一个周期，上周没参与对决冠军玩法但下周参与了对决冠军玩法的用户，上下周的主玩玩法、参与玩法以及对决冠军玩法游玩时长
 输出：时间区间（2024-10-09-2025-01-08），上周主玩玩法游玩时长，上周参与玩法游玩时长，本周主玩玩法游玩时长，本周参与玩法游玩时长，本周对决冠军玩法游玩时长
-## 涉及表名
-`dws_jordass_mode_roundrecord_di`
-## 提示信息
+
+【任务补充】
 对决冠军模式是指modename = "乐园" AND submodename = "对决冠军"
 时间固定从10.2开始计算周期，也就是说10.1实际上算作上周
+
 玩法时长保留两位小数
 case when modename="传统模式" and submodename like "CG%" and mapname="群屿" then "主题群屿" 
 when modename="传统模式" and mapname="群屿" then "传统群屿"
@@ -22,93 +22,5 @@ when modename="领地" then "领地"
 when modename="广阔天地" then "广阔天地"
 when modename="生存模式" then "隧道"
 else "其他模式"
+
 主玩定义：从上述所以玩法中选取对局时长最长的玩法
-## 失败案例参考
-以下案例曾出现过错误，请避免类似问题：
-### 失败案例 1
-- **SQL ID**: `sql_80`
-- **来源**: CKPT `V7.1_22.09_1108`
-
-**错误SQL:**
-
-```sql
-WITH week_dates AS (
-  SELECT '2024-10-09' AS week_start UNION ALL 
-  SELECT '2024-10-16' UNION ALL 
-  SELECT '2024-10-23' UNION ALL 
-  SELECT '2024-10-30' UNION ALL 
-  SELECT '2024-11-06' UNION ALL 
-  SELECT '2024-11-13' UNION ALL 
-  SELECT '2024-11-20' UNION ALL 
-  SELECT '2024-11-27' UNION ALL 
-  SELECT '2024-12-04' UNION ALL 
-  SELECT '2024-12-11' UNION ALL 
-  SELECT '2024-12-18' UNION ALL 
-  SELECT '2024-12-25' UNION ALL 
-  SELECT '2025-01-01'
-),
-user_weekly_data AS (
-  SELECT 
-    wd.week_start,
-    d.vplayerid,
-    CASE 
-      WHEN d.modename='传统模式' AND d.submodename LIKE 'CG%' AND d.mapname='群屿' THEN '主题群屿'
-      WHEN d.modename='传统模式' AND d.mapname='群屿' THEN '传统群屿'
-      WHEN d.modename='传统模式' AND d.mapname='假日群岛' THEN '假日群岛'
-      WHEN d.submodename = '广域战场模式' THEN '广域战场'
-      WHEN d.submodename='极能形态模式' THEN '极能形态'
-      WHEN d.modename='组队竞技' THEN '组竞'
-      WHEN d.modename='休闲模式' THEN '休闲'
-      WHEN d.modename='乐园' THEN '乐园'
-      WHEN d.modename='领地' THEN '领地'
-      WHEN d.modename='广阔天地' THEN '广阔天地'
-      WHEN d.modename='生存模式' THEN '隧道'
-      ELSE '其他模式'
-    END AS gameplay,
-    d.roundtime / 60.0 AS play_duration_min
-  FROM dws_jordass_mode_roundrecord_di d
-  INNER JOIN week_dates wd 
-    ON d.dtstatdate >= REPLACE(wd.week_start, '-', '')
-    AND d.dtstatdate < REPLACE(DATE_ADD(STR_TO_DATE(wd.week_start, '%Y-%m-%d'), INTERVAL 7 DAY), '-', '')
-  WHERE d.dtstatdate BETWEEN '20241002' AND '20250108'
-    AND d.vplayerid IS NOT NULL
-    AND d.roundtime > 0
-    AND d.modename IS NOT NULL
-),
-weekly_agg AS (
-  SELECT 
-    week_start,
-    vplayerid,
-    SUM(play_duration_min) AS total_play_duration,
-    MAX(CASE WHEN gameplay = '对决冠军' THEN 1 ELSE 0 END) AS played_djcj_this_week,
-    SUM(CASE WHEN gameplay = '对决冠军' THEN play_duration_min ELSE 0 END) AS djcj_duration
-  FROM user_weekly_data
-  GROUP BY week_start, vplayerid
-),
-week_comparison AS (
-  SELECT 
-    curr.week_start,
-    curr.vplayerid,
-    LAG(curr.played_djcj_this_week) OVER (PARTITION BY curr.vplayerid ORDER BY curr.week_start) AS last_week_djcj,
-    curr.played_djcj_this_week AS this_week_djcj,
-    LAG(curr.total_play_duration) OVER (PARTITION BY curr.vplayerid ORDER BY curr.week_start) AS last_week_total_duration,
-    curr.total_play_duration AS this_week_total_duration,
-    LAG(curr.djcj_duration) OVER (PARTITION BY curr.vplayerid ORDER BY curr.week_start) AS last_week_djcj_duration,
-    curr.djcj_duration AS this_week_djcj_duration
-  FROM weekly_agg curr
-)
-SELECT 
-  '2024-10-09-2025-01-08' AS time_period,
-  ROUND(AVG(last_week_total_duration), 2) AS last_week_main_play_duration,
-  ROUND(AVG(last_week_total_duration), 2) AS last_week_participated_play_duration,
-  ROUND(AVG(this_week_total_duration), 2) AS this_week_main_play_duration,
-  ROUND(AVG(this_week_total_duration), 2) AS this_week_participated_play_duration,
-  ROUND(AVG(this_week_djcj_duration), 2) AS this_week_djcj_play_duration
-FROM week_comparison
-WHERE last_week_djcj = 0 AND this_week_djcj = 1
-  AND last_week_total_duration IS NOT NULL
-  AND this_week_total_duration IS NOT NULL
-  AND this_week_djcj_duration > 0;
-```
-
-> **错误原因**: 结果与预期不匹配

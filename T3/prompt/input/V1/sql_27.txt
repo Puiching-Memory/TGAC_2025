@@ -4,43 +4,9 @@
 ## 用户问题
 统计：2024-01-01到2024-12-16，购买阶段出现了x次武器代买，除自定义模式、新手、训练场外所有模式。
 输出：武器代买次数
-## 涉及表名
-`dwd_argothek_matchdetails_hi`, `dwd_argothek_apinventorymovementlog_hi`
-## 提示信息
+
+【任务补充】
 provisioningflowid = "Matchmaking" -- 除自定义模式、新手、训练场外所有模式
+
 对局代买筛选逻辑：
 TransactionType = "FulfillRequest"
-## 成功案例参考
-以下案例执行成功，可作为参考：
-### 成功案例 1
-- **SQL ID**: `sql_27`
-- **得分**: 1
-- **来源**: CKPT `V7.1_22.09_1108`
-
-**SQL:**
-
-```sql
-SELECT COUNT(*) AS weapon_buy_count FROM dwd_argothek_apinventorymovementlog_hi WHERE transactiontype = 'FulfillRequest' AND matchinfogamemode IS NOT NULL AND dteventtime >= '2024-01-01 00:00:00' AND dteventtime <= '2024-12-16 23:59:59'
-```
----
-### 成功案例 2
-- **SQL ID**: `sql_27`
-- **得分**: 1
-- **来源**: CKPT `V6_31.40_1105`
-
-**SQL:**
-
-```sql
-SELECT
-  COUNT(*) AS weapon_proxy_purchase_count
-FROM
-  dwd_argothek_apinventorymovementlog_hi AS inv
-JOIN
-  dwd_argothek_matchdetails_hi AS match
-  ON inv.matchinfomatchid = match.matchid
-WHERE
-  inv.dteventtime >= '2024-01-01 00:00:00'
-  AND inv.dteventtime < '2024-12-17 00:00:00'
-  AND inv.transactiontype = 'FulfillRequest'
-  AND match.provisioningflowid = 'Matchmaking';
-```

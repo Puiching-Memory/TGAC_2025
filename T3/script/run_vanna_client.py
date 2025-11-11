@@ -10,11 +10,11 @@ from colorama import Fore, Style
 
 SERVER_URL = "http://localhost:8000/api/vanna/v2/chat_poll"
 AUTHORIZATION_HEADER = {"Authorization": "admin@example.com"}
-CKPT_DIR = Path("T3/ckpt/V6.1_31.40_1108")
+CKPT_DIR = Path("T3/ckpt/V6.1_33.72_1109")
 SCORE_PATH = CKPT_DIR / "score.csv"
 CKPT_RESULT_PATH = CKPT_DIR / "dataset_exe_result.json"
 UPLOAD_RESULT_PATH = Path("T3/upload/dataset_exe_result.json")
-PROMPT_DIR = Path("T3/script/prompt/input/V1")
+PROMPT_DIR = Path("T3/prompt/input/V1")
 
 
 def natural_sort_key(value: str) -> List[object]:

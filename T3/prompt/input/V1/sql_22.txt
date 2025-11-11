@@ -5,41 +5,8 @@
 统计：近30天用户在渠道登录的天数为5到8天，取最多天数的用户，并将用户ID转为qq
 输出：QQ
 统计日期：20250330-20250428
-## 涉及表名
-`dws_argothek_oss_login_di`, `dim_argothek_gplayerid2qqwxid_df`
-## 提示信息
+
+【任务补充】
 渠道筛选条件：iloginway = 3
 用户ID筛选swxid_type = "qq" -- 筛选swxid_type为"qq"
 dim_argothek_gplayerid2qqwxid_df限定20250428
-## 失败案例参考
-以下案例曾出现过错误，请避免类似问题：
-### 失败案例 1
-- **SQL ID**: `sql_22`
-- **来源**: CKPT `V7.1_22.09_1108`
-
-**错误SQL:**
-
-```sql
-SELECT 
-    qq_info.sqq AS QQ
-FROM (
-    SELECT 
-        l.iuserid,
-        COUNT(DISTINCT l.statis_date) AS login_days
-    FROM dws_argothek_oss_login_di l
-    WHERE 
-        l.statis_date BETWEEN 20250330 AND 20250428
-        AND l.iloginway = 3
-    GROUP BY l.iuserid
-    HAVING login_days BETWEEN 5 AND 8
-) t
-JOIN dim_argothek_gplayerid2qqwxid_df qq_info 
-    ON t.iuserid = qq_info.iuserid
-WHERE 
-    qq_info.dtstatdate = '20250428'
-    AND qq_info.swxid_type = 'qq'
-ORDER BY t.login_days DESC
-LIMIT 1;
-```
-
-> **错误原因**: 结果与预期不匹配

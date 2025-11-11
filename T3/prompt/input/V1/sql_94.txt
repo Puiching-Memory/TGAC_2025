@@ -4,57 +4,7 @@
 ## 用户问题
 统计20241123-20241128 全平台生存模式用户注册年份的设备情况
 输出：统计日期(20241123-20241128)，设备类型（手机、模拟器），注册年份，使用设备的人数，使用设备玩生存模式人数，使用设备玩生存模式占总设备人数的比例，使用设备玩生存模式的次留率
-## 涉及表名
-`dws_jordass_device_login_di`, `dws_jordass_login_df`, `dws_jordass_mode_roundrecord_di`
-## 提示信息
+
+【任务补充】
 设备类型：device_type 0-手机 1,5-模拟器 
 生存模式：modename='生存模式'
-## 失败案例参考
-以下案例曾出现过错误，请避免类似问题：
-### 失败案例 1
-- **SQL ID**: `sql_94`
-- **来源**: CKPT `V7.1_22.09_1108`
-
-**错误SQL:**
-
-```sql
-SELECT
-    dev.dtstatdate,
-    CASE
-        WHEN dev.device_type = 0 THEN '手机'
-        WHEN dev.device_type IN (1,5) THEN '模拟器'
-    END AS device_type_label,
-    YEAR(STR_TO_DATE(login.dregdate, '%Y%m%d')) AS register_year,
-    COUNT(DISTINCT dev.vplayerid) AS total_device_users,
-    SUM(CASE WHEN mode.modename = '生存模式' THEN 1 ELSE 0 END) AS survival_mode_users,
-    ROUND(
-        SUM(CASE WHEN mode.modename = '生存模式' THEN 1 ELSE 0 END) * 1.0 / COUNT(DISTINCT dev.vplayerid),
-        4
-    ) AS survival_ratio,
-    -- Calculate second-day retention rate for survival mode players
-    ROUND(
-        COUNT(DISTINCT CASE 
-            WHEN mode.modename = '生存模式' 
-                AND next_day.cbitmap IS NOT NULL 
-                AND SUBSTR(next_day.cbitmap, 1, 1) = '1' 
-            THEN dev.vplayerid 
-        END) * 1.0 / 
-        NULLIF(SUM(CASE WHEN mode.modename = '生存模式' THEN 1 ELSE 0 END), 0),
-        4
-    ) AS second_day_retention_rate
-FROM dws_jordass_device_login_di dev
-JOIN dws_jordass_login_df login ON dev.vplayerid = login.vplayerid AND dev.dtstatdate = login.dtstatdate
-LEFT JOIN dws_jordass_mode_roundrecord_di mode ON dev.vplayerid = mode.vplayerid AND dev.dtstatdate = mode.dtstatdate
--- Get next day's cbitmap for retention calculation
-LEFT JOIN dws_jordass_login_df next_day ON dev.vplayerid = next_day.vplayerid 
-    AND next_day.dtstatdate = DATE_FORMAT(DATE_ADD(STR_TO_DATE(dev.dtstatdate, '%Y%m%d'), INTERVAL 1 DAY), '%Y%m%d')
-WHERE dev.dtstatdate BETWEEN '20241123' AND '20241128'
-    AND dev.device_type IN (0,1,5)
-GROUP BY
-    dev.dtstatdate,
-    device_type_label,
-    register_year
-ORDER BY dev.dtstatdate, device_type_label, register_year;
-```
-
-> **错误原因**: 结果与预期不匹配

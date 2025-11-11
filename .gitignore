@@ -8,9 +8,16 @@ ckpt/
 model/
 chroma_db/
 temp/
+cache/
+datus/
+logs/
+LightRAG/
+rag_storage/
 
 dataset_exe_result.json
 *.zip
 T3/data/dataset_exe_result.json
 agentops.log
 *.csv
+.env
+*.log

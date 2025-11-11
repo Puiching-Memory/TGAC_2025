@@ -5,69 +5,8 @@
 统计开服至今使用频率最高的用户昵称
 2023.07.1200 - 2025071523
 输出：昵称（唯一）、人数
-## 涉及表名
-`dwd_argothek_playerlogin_hi`
-## 提示信息
+
+【任务补充】
 昵称筛选逻辑：
 nickname按照#进行划分，取#前半部分的作为nickname
 示例：多喝热水#131234 -> 昵称：多喝热水
-## 成功案例参考
-以下案例执行成功，可作为参考：
-### 成功案例 1
-- **SQL ID**: `sql_4`
-- **得分**: 1
-- **来源**: CKPT `V6_31.40_1105`
-
-**SQL:**
-
-```sql
-SELECT 
-    SPLIT_PART(vrolename, '#', 1) AS nickname,
-    COUNT(DISTINCT iuserid) AS user_count
-FROM 
-    dwd_argothek_playerlogin_hi
-WHERE 
-    dteventtime >= '2023-07-12 00:00:00'
-    AND dteventtime <= '2025-07-15 23:59:59'
-GROUP BY 
-    SPLIT_PART(vrolename, '#', 1)
-ORDER BY 
-    user_count DESC
-LIMIT 1;
-```
----
-### 成功案例 2
-- **SQL ID**: `sql_4`
-- **得分**: 1
-- **来源**: CKPT `V6.2_33.72_1109`
-
-**SQL:**
-
-```sql
-SELECT 
-    SPLIT_PART(vrolename, '#', 1) AS nickname,
-    COUNT(DISTINCT iuserid) AS user_count
-FROM 
-    dwd_argothek_playerlogin_hi
-WHERE 
-    dteventtime >= '2023-07-12 00:00:00'
-    AND dteventtime <= '2025-07-15 23:59:59'
-GROUP BY 
-    SPLIT_PART(vrolename, '#', 1)
-ORDER BY 
-    user_count DESC
-LIMIT 1;
-```
-## 失败案例参考
-以下案例曾出现过错误，请避免类似问题：
-### 失败案例 1
-- **SQL ID**: `sql_4`
-- **来源**: CKPT `V7.1_22.09_1108`
-
-**错误SQL:**
-
-```sql
-SELECT split_part(vrolename, '#', 1) AS nickname, COUNT(*) AS user_count FROM dwd_argothek_playerlogin_hi WHERE vrolename IS NOT NULL AND vrolename != '' GROUP BY split_part(vrolename, '#', 1) ORDER BY user_count DESC LIMIT 10
-```
-
-> **错误原因**: 结果与预期不匹配
