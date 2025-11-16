@@ -7,7 +7,34 @@ from typing import Dict, Any
 from transformers import AutoTokenizer
 
 
-def create_enhanced_prompt(task: Dict[str, Any]) -> str:
+def extract_engineer_info(existing_content: str) -> str:
+    """
+    从现有文件中提取 `## 工程师提供信息` section及其后续内容
+    
+    Args:
+        existing_content: 现有文件内容
+        
+    Returns:
+        `## 工程师提供信息` section及其后续内容的文本，如果没有则返回空字符串
+    """
+    target_section = "## 工程师提供信息"
+    lines = existing_content.split('\n')
+    
+    # 反向查找，从文件末尾往前查找目标section
+    for i in range(len(lines) - 1, -1, -1):
+        line_stripped = lines[i].strip()
+        if line_stripped == target_section or line_stripped.startswith(target_section):
+            # 找到目标section，提取从该行开始到文件末尾的所有内容
+            custom_content = '\n'.join(lines[i:])
+            # 确保以换行符结尾
+            if custom_content and not custom_content.endswith('\n'):
+                custom_content += '\n'
+            return custom_content
+    
+    return ""
+
+
+def create_enhanced_prompt(task: Dict[str, Any], existing_content: str = "") -> str:
     """
     创建提示词
     
@@ -47,13 +74,14 @@ def create_enhanced_prompt(task: Dict[str, Any]) -> str:
     # 任务说明
     prompt_parts.append("## 结果保存\n")
     prompt_parts.append(
-        "- 在调用 `run_sql_query` 时，必须使用 `sql_id` 参数保存结果：\n"
+        "- **重要**：在调用 `run_sql_query` 时，**必须且只能使用**任务中给定的 `sql_id` 参数保存结果：\n"
         "  ```json\n"
         "  {\n"
         '    "query": "你的SQL语句",\n'
         f'    "sql_id": "{sql_id}"\n'
         "  }\n"
         "  ```\n"
+        f"- **严禁**创建新的sql_id字段（如sql_id_xxx、sql_id_test等），**每个任务的所有查询都必须使用同一个sql_id：`{sql_id}`**\n"
         "- 工具会自动获取所有结果（不受行数限制）并保存到 `dataset_exe_result.json`\n"
         "- 工具返回摘要信息（行数、列名等），完整数据已保存到文件\n"
         "- 保存成功后再向用户汇报最终结论\n\n"
@@ -66,7 +94,7 @@ def create_enhanced_prompt(task: Dict[str, Any]) -> str:
     
     if knowledge:
         prompt_parts.append("## 任务补充\n")
-        prompt_parts.append("**注意**：任务补充信息的可信度高于用户问题。如果用户问题的语义不准确或存在歧义，请优先以任务补充为准。\n\n")
+        prompt_parts.append("**注意**：任务补充信息的准确性高于用户问题。如果用户问题的语义不准确或存在歧义，请优先以任务补充为准。\n\n")
         prompt_parts.append(f"{knowledge}\n")
     
     if table_list:
@@ -74,7 +102,26 @@ def create_enhanced_prompt(task: Dict[str, Any]) -> str:
         table_list_str = ", ".join([f"`{t}`" for t in table_list]) if isinstance(table_list, list) else str(table_list)
         prompt_parts.append(f"{table_list_str}\n")
     
-    return "".join(prompt_parts).rstrip() + "\n"
+    # 统一写入优先级说明（无论是否有工程师信息，都写入完整说明）
+    prompt_parts.append("## 信息优先级\n")
+    prompt_parts.append("**优先级说明**：工程师提供信息的准确性最高，其次是任务补充，最后是用户问题。如果存在冲突，请严格按照以下优先级执行：**工程师提供信息 > 任务补充 > 用户问题**。\n\n")
+    
+    # 生成基础提示词
+    base_prompt = "".join(prompt_parts).rstrip() + "\n"
+    
+    # 如果有现有内容，提取并追加 `## 工程师提供信息` section
+    if existing_content:
+        engineer_info = extract_engineer_info(existing_content)
+        if engineer_info:
+            # 确保基础提示词和自定义section之间有空行
+            if not base_prompt.endswith('\n\n'):
+                if base_prompt.endswith('\n'):
+                    base_prompt += '\n'
+                else:
+                    base_prompt += '\n\n'
+            base_prompt += engineer_info
+    
+    return base_prompt
 
 
 # 主程序
@@ -99,8 +146,20 @@ if __name__ == "__main__":
         if not sql_id:
             continue
         
-        # 生成提示词
-        prompt_v1 = create_enhanced_prompt(t)
+        # 检查现有文件是否存在，如果存在则读取内容
+        output_dir_v1 = t3_root / "prompt" / "input" / "V1"
+        output_dir_v1.mkdir(parents=True, exist_ok=True)
+        output_path_v1 = output_dir_v1 / f"{sql_id}.txt"
+        
+        existing_content = ""
+        if output_path_v1.exists():
+            with output_path_v1.open("r", encoding="utf-8") as f:
+                existing_content = f.read()
+            print(f"检测到已存在文件: {output_path_v1}")
+            print(f"将保留其中的 `## 工程师提供信息` section")
+        
+        # 生成提示词（传入现有内容以提取自定义section）
+        prompt_v1 = create_enhanced_prompt(t, existing_content)
         
         # 计算token数量
         token_count_v1 = len(tokenizer.encode(prompt_v1))
@@ -112,10 +171,6 @@ if __name__ == "__main__":
         print(prompt_v1)
         
         # 保存 V1 提示词
-        output_dir_v1 = t3_root / "prompt" / "input" / "V1"
-        output_dir_v1.mkdir(parents=True, exist_ok=True)
-        output_path_v1 = output_dir_v1 / f"{sql_id}.txt"
-        
         with output_path_v1.open("w", encoding="utf-8") as f:
             f.write(prompt_v1)
         

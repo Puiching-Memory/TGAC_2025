@@ -74,6 +74,12 @@ def main() -> None:
 
     failed_by_complexity: Dict[str, List[Dict[str, Any]]] = defaultdict(list)
     table_usage_count: Dict[str, int] = defaultdict(int)
+    
+    # 统计每个难度级别的题目总数
+    total_by_complexity: Dict[str, int] = defaultdict(int)
+    for sql_id, info in dataset_map.items():
+        complexity = info.get("复杂度", "未知")
+        total_by_complexity[complexity] += 1
 
     for sql_id, score in scores:
         if score >= 1:
@@ -113,8 +119,9 @@ def main() -> None:
 
     for complexity in sorted(failed_by_complexity.keys()):
         items = failed_by_complexity[complexity]
+        total = total_by_complexity.get(complexity, 0)
         print("=" * 80)
-        print(f"复杂度：{complexity}（未通过 {len(items)} 题）")
+        print(f"复杂度：{complexity}（未通过 {len(items)} 题 / 总共 {total} 题）")
         print("-" * 80)
         for idx, item in enumerate(sorted(items, key=lambda x: x["sql_id"]), 1):
             tables = ", ".join(item["tables"]) if item["tables"] else "（未提供）"

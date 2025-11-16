@@ -30,6 +30,7 @@ class Record:
     question: Optional[str]
     sql: str
     result: List[Mapping[str, Any]]
+    table_list: Optional[List[str]] = None
 
 
 def load_json(path: Path) -> Any:
@@ -47,8 +48,19 @@ def build_question_lookup(final_dataset: Iterable[Mapping[str, Any]]) -> Dict[st
     return lookup
 
 
+def build_table_list_lookup(final_dataset: Iterable[Mapping[str, Any]]) -> Dict[str, List[str]]:
+    lookup: Dict[str, List[str]] = {}
+    for item in final_dataset:
+        sql_id = item.get("sql_id")
+        table_list = item.get("table_list")
+        if isinstance(sql_id, str) and isinstance(table_list, list):
+            lookup[sql_id] = [str(t) for t in table_list if isinstance(t, (str, int, float))]
+    return lookup
+
+
 def collect_correct_from_ckpt(
     question_lookup: Mapping[str, str],
+    table_list_lookup: Mapping[str, List[str]],
 ) -> List[Record]:
     records: List[Record] = []
 
@@ -85,6 +97,7 @@ def collect_correct_from_ckpt(
                 question=question_lookup.get(sql_id),
                 sql=sql,
                 result=cleaned_result,
+                table_list=table_list_lookup.get(sql_id),
             )
             records.append(record)
 
@@ -119,6 +132,7 @@ def collect_golden_from_final_dataset(
         sql_id = item.get("sql_id")
         sql = item.get("sql")
         question = item.get("question")
+        table_list = item.get("table_list")
         if not isinstance(sql_id, str) or not isinstance(sql, str):
             continue
         result = available_results.get(sql_id, [])
@@ -127,12 +141,16 @@ def collect_golden_from_final_dataset(
             if cache_key not in execution_cache:
                 execution_cache[cache_key] = execute_sql(cache_key)
             result = execution_cache[cache_key]
+        cleaned_table_list: Optional[List[str]] = None
+        if isinstance(table_list, list):
+            cleaned_table_list = [str(t) for t in table_list if isinstance(t, (str, int, float))]
         record = Record(
             sql_id=sql_id,
             sources=["final_dataset"],
             question=question if isinstance(question, str) else None,
             sql=sql,
             result=result,
+            table_list=cleaned_table_list,
         )
         records.append(record)
     return records
@@ -157,11 +175,21 @@ def render_record(record: Record) -> str:
         "用户问题:",
         record.question.strip() if record.question else "（暂无）",
         "",
+        "使用的表:",
+    ]
+    
+    if record.table_list:
+        lines.append(", ".join(record.table_list))
+    else:
+        lines.append("（暂无）")
+    
+    lines.extend([
+        "",
         "SQL:",
         record.sql.strip(),
         "",
         "运行结果:",
-    ]
+    ])
 
     if record.result:
         for row in record.result:
@@ -240,6 +268,9 @@ def merge_duplicates(records: Iterable[Record]) -> List[Record]:
             for src in record.sources:
                 if src not in existing.sources:
                     existing.sources.append(src)
+            # 如果现有记录没有表信息，但新记录有，则更新
+            if not existing.table_list and record.table_list:
+                existing.table_list = record.table_list
         else:
             unique[key] = Record(
                 sql_id=record.sql_id,
@@ -247,6 +278,7 @@ def merge_duplicates(records: Iterable[Record]) -> List[Record]:
                 question=record.question,
                 sql=record.sql,
                 result=record.result,
+                table_list=record.table_list,
             )
     return list(unique.values())
 
@@ -260,7 +292,8 @@ def main() -> None:
         raise ValueError("final_dataset.json 格式错误，应为数组。")
 
     question_lookup = build_question_lookup(final_dataset)
-    ckpt_records = collect_correct_from_ckpt(question_lookup)
+    table_list_lookup = build_table_list_lookup(final_dataset)
+    ckpt_records = collect_correct_from_ckpt(question_lookup, table_list_lookup)
     results_lookup = group_best_results(ckpt_records)
     golden_records = collect_golden_from_final_dataset(final_dataset, results_lookup)
 
