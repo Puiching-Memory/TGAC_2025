@@ -7,6 +7,7 @@ from typing import Any, Dict, Iterable, List, Mapping, Optional
 import re
 from sqlalchemy import create_engine, text
 from sqlalchemy.engine import Engine
+from transformers import AutoTokenizer
 
 # ============================================================================
 # 配置变量 - 可根据实际需求修改以下配置
@@ -21,6 +22,10 @@ TOON_LIB_SRC = REPO_ROOT / "lib" / "toon-python" / "src"
 # TOON 格式配置
 TOON_INDENT = 2
 TOON_DELIMITER = ","
+
+# Token 配置
+MAX_TOKENS_PER_FILE = 3000  # 每个文件的最大 token 数
+QWEN_MODEL_NAME = "Qwen/Qwen3-0.6B"  # Qwen3 分词器模型名称
 
 # 数据库配置（可选，如果不需要检查字段是否为null，设置为 None）
 # 格式示例：mysql+pymysql://user:password@host:port/database
@@ -118,20 +123,74 @@ def build_table_from_schema(schema_table: Mapping[str, Any]) -> Dict[str, Any]:
         column["nullable"] = True
         column["autoincrement"] = False
         
-        columns.append(prune_empty(column))
+        columns.append(column)
     
-    # 构建表信息
+    # 统一所有字段的键集合，确保格式一致（使用表格格式）
+    # 收集所有可能的键，并确定标准键集合
+    all_keys = set()
+    for col in columns:
+        all_keys.update(col.keys())
+    
+    # 定义标准键集合（按顺序）
+    standard_keys = ["name", "description", "type", "type_original", "primary_key", "nullable", "autoincrement"]
+    # 只保留实际存在的键
+    standard_keys = [k for k in standard_keys if k in all_keys]
+    # 添加其他可能存在的键
+    for key in sorted(all_keys):
+        if key not in standard_keys:
+            standard_keys.append(key)
+    
+    # 确保所有字段都有相同的键集合
+    unified_columns: List[Dict[str, Any]] = []
+    for col in columns:
+        unified_col: Dict[str, Any] = {}
+        for key in standard_keys:
+            if key in col:
+                val = col[key]
+                # 保留值，即使是 None 或空字符串
+                unified_col[key] = val
+            else:
+                # 对于缺失的键，根据键的类型设置默认值
+                if key == "description":
+                    unified_col[key] = ""  # 空字符串
+                elif key == "type_original":
+                    unified_col[key] = None  # type_original 可以为 None
+                elif key in ["primary_key", "nullable", "autoincrement"]:
+                    # 这些键应该已经有默认值，但为了安全起见
+                    unified_col[key] = col.get(key, False if key == "primary_key" or key == "autoincrement" else True)
+                else:
+                    unified_col[key] = col.get(key, None)
+        unified_columns.append(unified_col)
+    
+    # 构建表信息，确保顺序：table_name, description, columns
     table: Dict[str, Any] = {
         "table_name": table_name,
-        "columns": columns,
     }
     
+    # 添加 description（如果存在），放在 table_name 之后
     if table_description and isinstance(table_description, str):
         desc = table_description.strip()
         if desc:
             table["description"] = desc
     
-    return prune_empty(table)
+    # 最后添加 columns
+    table["columns"] = unified_columns
+    
+    # 对于 columns 数组，我们需要保留所有键以保持表格格式
+    # 但可以清理表级别的空值
+    pruned_table: Dict[str, Any] = {}
+    for key, val in table.items():
+        if key == "columns":
+            # 保留 columns 数组，不进行深度清理（以保持键的一致性）
+            pruned_table[key] = val
+        else:
+            # 对于其他字段，可以清理空值
+            pruned_val = prune_empty(val)
+            if pruned_val is not None:
+                if not (isinstance(pruned_val, (list, dict)) and not pruned_val):
+                    pruned_table[key] = pruned_val
+    
+    return pruned_table
 
 
 def prune_empty(value: Any) -> Any:
@@ -160,6 +219,37 @@ def prune_empty(value: Any) -> Any:
 
     if isinstance(value, str):
         return value if value.strip() else None
+
+    return value
+
+
+def prune_empty_but_keep_strings(value: Any) -> Any:
+    """递归清理空值，但保留空字符串（用于保持键的一致性）"""
+    if isinstance(value, dict):
+        pruned_dict: Dict[str, Any] = {}
+        for key, val in value.items():
+            pruned_value = prune_empty_but_keep_strings(val)
+            if pruned_value is None and not isinstance(val, str):
+                continue
+            if isinstance(pruned_value, (list, dict)) and not pruned_value:
+                continue
+            pruned_dict[key] = pruned_value
+        return pruned_dict
+
+    if isinstance(value, list):
+        pruned_list: List[Any] = []
+        for item in value:
+            pruned_item = prune_empty_but_keep_strings(item)
+            if pruned_item is None and not isinstance(item, str):
+                continue
+            if isinstance(pruned_item, (list, dict)) and not pruned_item:
+                continue
+            pruned_list.append(pruned_item)
+        return pruned_list
+
+    # 保留字符串，即使是空字符串
+    if isinstance(value, str):
+        return value
 
     return value
 
@@ -261,17 +351,129 @@ def should_skip_field(
     return False
 
 
-def write_field_to_toon(field_data: Mapping[str, Any], output_path: Path, indent: int, delimiter: str) -> None:
-    """将字段数据写入 TOON 格式文件"""
+def write_table_to_toon(table_data: Mapping[str, Any], output_path: Path, indent: int, delimiter: str) -> None:
+    """将表数据写入 TOON 格式文件"""
     from toon_format import encode  # type: ignore
 
     options = {
         "indent": indent,
         "delimiter": delimiter,
     }
-    encoded = encode(field_data, options)
+    encoded = encode(table_data, options)
     with output_path.open("w", encoding="utf-8") as fp:
         fp.write(encoded)
+
+
+def count_tokens_with_qwen(text: str, tokenizer: Any) -> int:
+    """使用 Qwen 分词器计算 token 数量"""
+    try:
+        tokens = tokenizer.encode(text, add_special_tokens=False)
+        return len(tokens)
+    except Exception as e:
+        print(f"警告: 计算 token 时出错: {e}，使用字符数估算")
+        # 如果分词失败，使用粗略估算（1 token ≈ 4 字符）
+        return len(text) // 4
+
+
+def split_table_by_tokens(
+    table_data: Dict[str, Any],
+    tokenizer: Any,
+    max_tokens: int,
+    indent: int,
+    delimiter: str
+) -> List[Dict[str, Any]]:
+    """
+    将表按 token 数量切分为多个部分
+    
+    Args:
+        table_data: 表数据
+        tokenizer: Qwen 分词器
+        max_tokens: 每个部分的最大 token 数
+        indent: TOON 格式缩进
+        delimiter: TOON 格式分隔符
+    
+    Returns:
+        切分后的表数据列表
+    """
+    from toon_format import encode  # type: ignore
+    
+    # 先编码整个表，计算总 token 数
+    options = {
+        "indent": indent,
+        "delimiter": delimiter,
+    }
+    full_encoded = encode(table_data, options)
+    total_tokens = count_tokens_with_qwen(full_encoded, tokenizer)
+    
+    # 如果总 token 数不超过限制，直接返回
+    if total_tokens <= max_tokens:
+        return [table_data]
+    
+    # 需要切分：按字段分组
+    table_name = table_data.get("table_name", "")
+    table_description = table_data.get("description", "")
+    columns = table_data.get("columns", [])
+    
+    if not columns:
+        return [table_data]
+    
+    # 按 token 数分组，尽量让每组不超过 max_tokens
+    result_tables: List[Dict[str, Any]] = []
+    current_group: List[Dict[str, Any]] = []
+    
+    for col in columns:
+        # 尝试将当前字段添加到当前组
+        test_group = current_group + [col]
+        test_table = {
+            "table_name": table_name,
+            "columns": test_group
+        }
+        if table_description:
+            test_table["description"] = table_description
+        
+        # 计算添加字段后的实际 token 数
+        test_encoded = encode(test_table, options)
+        test_tokens = count_tokens_with_qwen(test_encoded, tokenizer)
+        
+        # 如果添加字段后超过限制，且当前组不为空，先保存当前组
+        if test_tokens > max_tokens and current_group:
+            result_table = {
+                "table_name": table_name,
+                "columns": current_group
+            }
+            if table_description:
+                result_table["description"] = table_description
+            result_tables.append(result_table)
+            current_group = []
+            # 重新计算单独字段的 token 数
+            test_group = [col]
+            test_table = {
+                "table_name": table_name,
+                "columns": test_group
+            }
+            if table_description:
+                test_table["description"] = table_description
+            test_encoded = encode(test_table, options)
+            test_tokens = count_tokens_with_qwen(test_encoded, tokenizer)
+        
+        # 如果单个字段（含表头）就超过限制，仍然包含它（避免无限循环）
+        if test_tokens > max_tokens:
+            print(f"警告: 表 {table_name} 的字段 {col.get('name', 'unknown')} 单独编码后 token 数 ({test_tokens}) 超过限制 ({max_tokens})，仍将包含该字段")
+        
+        # 添加字段到当前组
+        current_group.append(col)
+    
+    # 保存最后一组
+    if current_group:
+        result_table = {
+            "table_name": table_name,
+            "columns": current_group
+        }
+        if table_description:
+            result_table["description"] = table_description
+        result_tables.append(result_table)
+    
+    return result_tables if result_tables else [table_data]
 
 
 def generate_schema_and_export(
@@ -280,10 +482,12 @@ def generate_schema_and_export(
     indent: int,
     delimiter: str,
     database_url: Optional[str] = None,
-    skip_all_null: bool = True
+    skip_all_null: bool = True,
+    max_tokens: int = 3000,
+    qwen_model_name: str = "Qwen/Qwen3-0.6B"
 ) -> int:
     """
-    从 schema.json 生成数据结构并导出为字段切片的 TOON 文件
+    从 schema.json 生成数据结构并导出为表切片的 TOON 文件
     
     Args:
         schema_path: schema.json 文件路径
@@ -292,8 +496,18 @@ def generate_schema_and_export(
         delimiter: TOON 格式分隔符
         database_url: 数据库连接URL（可选，格式如：mysql+pymysql://user:password@host:port/database）
         skip_all_null: 是否跳过全部为null的字段
+        max_tokens: 每个文件的最大 token 数
+        qwen_model_name: Qwen 分词器模型名称
     """
     ensure_toon_format()
+
+    # 初始化 Qwen 分词器
+    try:
+        print(f"正在加载 Qwen 分词器: {qwen_model_name}")
+        tokenizer = AutoTokenizer.from_pretrained(qwen_model_name, trust_remote_code=True)
+        print("Qwen 分词器加载成功")
+    except Exception as e:
+        raise RuntimeError(f"无法加载 Qwen 分词器: {e}") from e
 
     # 创建数据库引擎（如果提供了数据库URL）
     engine: Optional[Engine] = None
@@ -332,53 +546,86 @@ def generate_schema_and_export(
         for old_file in output_dir.glob("*.txt"):
             old_file.unlink()
 
-    total_fields = 0
+    total_files = 0
     skipped_fields = 0
 
-    # 导出每个字段为单独的 TOON 文件
+    # 导出每个表为 TOON 文件（如果超过 token 限制则切分）
     for table_name, table_data in tables.items():
         columns: List[Mapping[str, Any]] = table_data.get("columns", []) or []
+        
+        # 过滤掉全部为null的字段（如果启用了此功能）
+        filtered_columns: List[Mapping[str, Any]] = []
         for column in columns:
             column_name = column.get("name")
             if not isinstance(column_name, str):
                 continue
-
-            # 检查是否应该跳过该字段（如果启用了跳过全null字段的功能）
+            
+            # 检查是否应该跳过该字段
             if skip_all_null and should_skip_field(column, engine, table_name):
                 skipped_fields += 1
                 print(f"跳过字段（全部为null）: {table_name}.{column_name}")
                 continue
-
-            # 构建字段条目
-            field_entry: Dict[str, Any] = {"table_name": table_name}
-            field_entry.update(column)
-
-            # 生成安全的文件名
-            safe_table = sanitize_filename(table_name)
-            safe_column = sanitize_filename(column_name)
-            output_file = output_dir / f"{safe_table}__{safe_column}.txt"
-
+            
+            filtered_columns.append(column)
+        
+        # 如果没有有效字段，跳过该表
+        if not filtered_columns:
+            print(f"跳过表（无有效字段）: {table_name}")
+            continue
+        
+        # 更新表的列信息
+        table_data_with_filtered = table_data.copy()
+        table_data_with_filtered["columns"] = filtered_columns
+        
+        # 按 token 数量切分表
+        split_tables = split_table_by_tokens(
+            table_data_with_filtered,
+            tokenizer,
+            max_tokens,
+            indent,
+            delimiter
+        )
+        
+        # 为每个切分后的表生成文件
+        safe_table = sanitize_filename(table_name)
+        for idx, split_table in enumerate(split_tables):
+            if len(split_tables) > 1:
+                # 如果表被切分了，添加序号后缀
+                output_file = output_dir / f"{safe_table}_{idx + 1}.txt"
+            else:
+                # 如果表没有被切分，使用原表名
+                output_file = output_dir / f"{safe_table}.txt"
+            
             # 写入 TOON 格式文件
-            write_field_to_toon(field_entry, output_file, indent=indent, delimiter=delimiter)
-            total_fields += 1
+            write_table_to_toon(split_table, output_file, indent=indent, delimiter=delimiter)
+            total_files += 1
+            
+            # 计算并显示 token 数（用于调试）
+            from toon_format import encode  # type: ignore
+            options = {"indent": indent, "delimiter": delimiter}
+            encoded = encode(split_table, options)
+            token_count = count_tokens_with_qwen(encoded, tokenizer)
+            print(f"已生成: {output_file.name} (token数: {token_count})")
 
     if skipped_fields > 0:
         print(f"已跳过 {skipped_fields} 个全部为null的字段")
     
-    return total_fields
+    return total_files
 
 
 def main() -> None:
     """主函数"""
-    total_fields = generate_schema_and_export(
+    total_files = generate_schema_and_export(
         schema_path=SCHEMA_PATH,
         output_dir=OUTPUT_DIR,
         indent=TOON_INDENT,
         delimiter=TOON_DELIMITER,
         database_url=DATABASE_URL,
-        skip_all_null=SKIP_ALL_NULL
+        skip_all_null=SKIP_ALL_NULL,
+        max_tokens=MAX_TOKENS_PER_FILE,
+        qwen_model_name=QWEN_MODEL_NAME
     )
-    print(f"已生成 {total_fields} 个字段的 TOON 文本，输出目录：{OUTPUT_DIR}")
+    print(f"已生成 {total_files} 个表的 TOON 文本文件，输出目录：{OUTPUT_DIR}")
 
 
 if __name__ == "__main__":

@@ -13,6 +13,11 @@ datus/
 logs/
 LightRAG/
 rag_storage/
+correct_examples/
+correct_examples_json/
+error_examples/
+error_examples_json/
+generated_schema_toon/
 
 dataset_exe_result.json
 *.zip

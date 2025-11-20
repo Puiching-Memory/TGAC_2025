@@ -59,7 +59,7 @@ def load_scores(path: Path) -> List[Tuple[str, float]]:
 
 def main() -> None:
     t3_root = Path(__file__).resolve().parents[1]
-    ckpt_root = t3_root / "ckpt" / "V8.2_39.53_1114"
+    ckpt_root = t3_root / "ckpt" / "V9_40.70_1116"
 
     dataset_info_path = t3_root / "data" / "final_dataset.json"
     score_path = ckpt_root / "score.csv"

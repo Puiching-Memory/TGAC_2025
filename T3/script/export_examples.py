@@ -3,6 +3,7 @@ from __future__ import annotations
 import csv
 import json
 import re
+import sys
 from dataclasses import dataclass
 from datetime import date, datetime
 from decimal import Decimal
@@ -12,11 +13,28 @@ from typing import Any, Dict, Iterable, List, Mapping, Optional
 from sqlalchemy import create_engine, text
 from sqlalchemy.engine import Engine
 
-# ==== 开发者可根据实际路径调整以下常量 ====
+# TOON 格式支持
 REPO_ROOT = Path(__file__).resolve().parents[1]
+TOON_LIB_SRC = REPO_ROOT / "lib" / "toon-python" / "src"
+
+def ensure_toon_format() -> None:
+    """确保 toon_format 模块可用"""
+    try:
+        import toon_format  # type: ignore  # noqa: F401
+    except ModuleNotFoundError:
+        sys.path.insert(0, str(TOON_LIB_SRC))
+
+ensure_toon_format()
+from toon_format import encode  # type: ignore
+
+# ==== 开发者可根据实际路径调整以下常量 ====
+# REPO_ROOT 已在上面定义
 CKPT_DIR = REPO_ROOT / "ckpt"
 FINAL_DATASET_PATH = REPO_ROOT / "data" / "final_dataset.json"
 OUTPUT_DIR = REPO_ROOT / "data" / "correct_examples"
+ERROR_OUTPUT_DIR = REPO_ROOT / "data" / "error_examples"  # 新增：错误案例输出目录
+JSON_OUTPUT_DIR = REPO_ROOT / "data" / "correct_examples_json"  # JSON 格式输出目录
+ERROR_JSON_OUTPUT_DIR = REPO_ROOT / "data" / "error_examples_json"  # 错误案例 JSON 格式输出目录
 OUTPUT_ENCODING = "utf-8"
 DB_CONNECTION_URL = "mysql+pymysql://root:@localhost:9030/database_main"
 SQL_RESULT_LIMIT = 100
@@ -118,6 +136,69 @@ def load_correct_ids(score_path: Path) -> set[str]:
     return correct_ids
 
 
+def load_incorrect_ids(score_path: Path) -> set[str]:
+    """加载错误案例的SQL ID（得分不为1的记录）"""
+    incorrect_ids: set[str] = set()
+    with score_path.open("r", encoding="utf-8-sig", newline="") as fp:
+        reader = csv.DictReader(fp)
+        for row in reader:
+            sql_id = row.get("SQL ID") or row.get("sql_id")
+            score = row.get("得分") or row.get("score")
+            if not isinstance(sql_id, str):
+                continue
+            # 得分不为1的记录视为错误案例
+            if isinstance(score, str) and score.strip() != "1":
+                incorrect_ids.add(sql_id.strip())
+    return incorrect_ids
+
+
+def collect_incorrect_from_ckpt(
+    question_lookup: Mapping[str, str],
+    table_list_lookup: Mapping[str, List[str]],
+) -> List[Record]:
+    """收集错误案例，逻辑与collect_correct_from_ckpt类似"""
+    records: List[Record] = []
+
+    for score_path in sorted(CKPT_DIR.glob("*/score.csv")):
+        version = score_path.parent.name
+        incorrect_ids = load_incorrect_ids(score_path)
+        dataset_path = score_path.parent / "dataset_exe_result.json"
+        if not dataset_path.exists():
+            continue
+
+        dataset_entries = load_json(dataset_path)
+        if not isinstance(dataset_entries, list):
+            continue
+
+        for entry in dataset_entries:
+            if not isinstance(entry, Mapping):
+                continue
+            sql_id = entry.get("sql_id")
+            if sql_id not in incorrect_ids:
+                continue
+            sql = entry.get("sql")
+            if not isinstance(sql, str) or not sql.strip():
+                continue
+            result = entry.get("result")
+            if not isinstance(result, list):
+                result = []
+            cleaned_result: List[Mapping[str, Any]] = [
+                row for row in result if isinstance(row, Mapping)
+            ]
+
+            record = Record(
+                sql_id=sql_id,
+                sources=[f"ckpt/{version}"],
+                question=question_lookup.get(sql_id),
+                sql=sql,
+                result=cleaned_result,
+                table_list=table_list_lookup.get(sql_id),
+            )
+            records.append(record)
+
+    return records
+
+
 def collect_golden_from_final_dataset(
     final_dataset: Iterable[Mapping[str, Any]],
     available_results: Mapping[str, List[Mapping[str, Any]]],
@@ -162,42 +243,102 @@ def ensure_output_dir(path: Path) -> None:
         txt_file.unlink()
 
 
+def ensure_json_output_dir(path: Path) -> None:
+    """确保 JSON 输出目录存在，并清理旧的 JSON 文件"""
+    path.mkdir(parents=True, exist_ok=True)
+    for json_file in path.glob("*.json"):
+        json_file.unlink()
+
+
 def sanitize_filename(text: str) -> str:
     safe_text = re.sub(r"[^A-Za-z0-9_.+-]", "_", text)
     safe_text = re.sub(r"_+", "_", safe_text).strip("_")
     return safe_text or "record"
 
 
-def render_record(record: Record) -> str:
+def render_record(record: Record, is_error: bool = False) -> str:
+    """渲染记录为 Markdown 格式的文档"""
+    title = "SQL 错误示例文档" if is_error else "SQL 正确示例文档"
     lines: List[str] = [
-        f"SQL ID: {record.sql_id}",
+        f"# {title}",
         "",
-        "用户问题:",
-        record.question.strip() if record.question else "（暂无）",
+        "## 基本信息",
         "",
-        "使用的表:",
+        f"- **SQL ID**: `{record.sql_id}`",
+        "",
+        "---",
+        "",
+        "## 用户问题",
+        "",
     ]
     
-    if record.table_list:
-        lines.append(", ".join(record.table_list))
+    if record.question:
+        question_text = record.question.strip()
+        lines.append(question_text)
     else:
-        lines.append("（暂无）")
+        lines.append("*（暂无）*")
     
     lines.extend([
         "",
-        "SQL:",
-        record.sql.strip(),
+        "---",
         "",
-        "运行结果:",
+        "## 使用的表",
+        "",
+    ])
+    
+    if record.table_list:
+        for table in record.table_list:
+            lines.append(f"- `{table}`")
+    else:
+        lines.append("*（暂无）*")
+    
+    lines.extend([
+        "",
+        "---",
+        "",
+        "## SQL 语句",
+        "",
+        "```sql",
+        record.sql.strip(),
+        "```",
+        "",
+        "---",
+        "",
+        "## 运行结果",
+        "",
     ])
 
     if record.result:
-        for row in record.result:
-            lines.append(json.dumps(row, ensure_ascii=False))
+        try:
+            # 将 JSON 数据转换为 TOON 格式
+            toon_data = encode(record.result, {"indent": 2, "delimiter": ","})
+            lines.append("```toon")
+            lines.append(toon_data)
+        except Exception as e:
+            # 如果 TOON 转换失败，回退到 JSON 格式
+            print(f"警告: TOON 转换失败 ({record.sql_id}): {e}，使用 JSON 格式")
+            lines.append("```json")
+            lines.append(json.dumps(record.result, ensure_ascii=False, indent=4))
+        lines.append("```")
+        lines.append("")
     else:
-        lines.append("（暂无数据）")
+        lines.append("*（暂无数据）*")
+        lines.append("")
 
     return "\n".join(lines) + "\n"
+
+
+def record_to_json(record: Record, is_error: bool = False) -> Dict[str, Any]:
+    """将 Record 转换为 JSON 格式的字典"""
+    return {
+        "sql_id": record.sql_id,
+        "sources": record.sources,
+        "question": record.question,
+        "sql": record.sql,
+        "result": record.result,
+        "table_list": record.table_list,
+        "is_error": is_error,
+    }
 
 
 def group_best_results(records: Iterable[Record]) -> Dict[str, List[Mapping[str, Any]]]:
@@ -304,9 +445,70 @@ def main() -> None:
         source_tag = "+".join(record.sources)
         file_name = f"{sanitize_filename(record.sql_id)}__{sanitize_filename(source_tag)}.txt"
         output_path = OUTPUT_DIR / file_name
-        output_path.write_text(render_record(record), encoding=OUTPUT_ENCODING)
+        output_path.write_text(render_record(record, is_error=False), encoding=OUTPUT_ENCODING)
 
     print(f"已输出 {len(all_records)} 个正确示例到 {OUTPUT_DIR}")
+    
+    # 导出 JSON 格式
+    ensure_json_output_dir(JSON_OUTPUT_DIR)
+    for record in all_records:
+        source_tag = "+".join(record.sources)
+        file_name = f"{sanitize_filename(record.sql_id)}__{sanitize_filename(source_tag)}.json"
+        output_path = JSON_OUTPUT_DIR / file_name
+        json_data = record_to_json(record, is_error=False)
+        output_path.write_text(
+            json.dumps(json_data, ensure_ascii=False, indent=2),
+            encoding=OUTPUT_ENCODING
+        )
+    
+    # 导出合并的 JSON 文件（包含所有记录）
+    merged_json_path = JSON_OUTPUT_DIR / "all_records.json"
+    all_json_data = [record_to_json(record, is_error=False) for record in all_records]
+    merged_json_path.write_text(
+        json.dumps(all_json_data, ensure_ascii=False, indent=2),
+        encoding=OUTPUT_ENCODING
+    )
+    
+    print(f"已输出 {len(all_records)} 个正确示例（JSON 格式）到 {JSON_OUTPUT_DIR}")
+    print(f"已输出合并文件到 {merged_json_path}")
+    
+    # 处理错误案例
+    error_ckpt_records = collect_incorrect_from_ckpt(question_lookup, table_list_lookup)
+    
+    ensure_output_dir(ERROR_OUTPUT_DIR)
+    
+    # 错误案例也需要去重合并
+    error_records = merge_duplicates(error_ckpt_records)
+    for record in error_records:
+        source_tag = "+".join(record.sources)
+        file_name = f"{sanitize_filename(record.sql_id)}__{sanitize_filename(source_tag)}.txt"
+        output_path = ERROR_OUTPUT_DIR / file_name
+        output_path.write_text(render_record(record, is_error=True), encoding=OUTPUT_ENCODING)
+
+    print(f"已输出 {len(error_records)} 个错误示例到 {ERROR_OUTPUT_DIR}")
+    
+    # 导出错误案例 JSON 格式
+    ensure_json_output_dir(ERROR_JSON_OUTPUT_DIR)
+    for record in error_records:
+        source_tag = "+".join(record.sources)
+        file_name = f"{sanitize_filename(record.sql_id)}__{sanitize_filename(source_tag)}.json"
+        output_path = ERROR_JSON_OUTPUT_DIR / file_name
+        json_data = record_to_json(record, is_error=True)
+        output_path.write_text(
+            json.dumps(json_data, ensure_ascii=False, indent=2),
+            encoding=OUTPUT_ENCODING
+        )
+    
+    # 导出合并的错误案例 JSON 文件
+    error_merged_json_path = ERROR_JSON_OUTPUT_DIR / "all_records.json"
+    all_error_json_data = [record_to_json(record, is_error=True) for record in error_records]
+    error_merged_json_path.write_text(
+        json.dumps(all_error_json_data, ensure_ascii=False, indent=2),
+        encoding=OUTPUT_ENCODING
+    )
+    
+    print(f"已输出 {len(error_records)} 个错误示例（JSON 格式）到 {ERROR_JSON_OUTPUT_DIR}")
+    print(f"已输出合并文件到 {error_merged_json_path}")
 
 
 if __name__ == "__main__":
