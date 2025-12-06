@@ -1,0 +1,9 @@
+    {
+        "sql_id": "sql_68",
+        "question": "统计时间范围：25.1.28-25.2.10，新春华服id：848，841 \n输出：日期（YYMMDD），人数",
+        "复杂度": "1简单",
+        "table_list": [
+            "dwd_jordass_lotteryrecord_hi"
+        ],
+        "knowledge": "新春华服：\nactivitytype in (848, 841)"
+    }
