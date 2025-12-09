@@ -274,11 +274,11 @@ if __name__ == '__main__':
     }
 
     # 执行插入操作
-    insert_file_path = "T3/data/insert_sql.json"
-    insert_result_file_path = "T3/data/insert_exe_result.json"
+    insert_file_path = "data/insert_sql.json"
+    insert_result_file_path = "data/insert_exe_result.json"
     sql_executor.insert_data_with_pymysql(insert_file_path, insert_result_file_path, db_configuration)
     
     # 执行查询操作
-    dataset_file_path = "T3/data/final_dataset.json"
-    dataset_result_file_path = "T3/data/dataset_exe_result.json"
+    dataset_file_path = "data/final_dataset.json"
+    dataset_result_file_path = "data/dataset_exe_result.json"
     sql_executor.execute_sql_with_pymysql(dataset_file_path, dataset_result_file_path, db_config = db_configuration)

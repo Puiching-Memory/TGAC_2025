@@ -1,5 +1,5 @@
 r"""
-比对T3\ckpt中任意两个版本之间，新增加了哪些正确题目
+比对ckpt中任意两个版本之间，新增加了哪些正确题目
 
 使用方法:
     python compare_versions.py [旧版本目录] [新版本目录] [选项]
@@ -39,7 +39,7 @@ except ImportError:
         RESET_ALL = ""
     HAS_COLORAMA = False
 
-CKPT_BASE_DIR = Path("T3/ckpt")
+CKPT_BASE_DIR = Path("ckpt")
 
 
 def load_score_map(score_path: Path) -> Dict[str, int]:
@@ -221,7 +221,7 @@ def save_to_json(
 
 def main():
     parser = argparse.ArgumentParser(
-        description="比对T3\\ckpt中任意两个版本之间，新增加了哪些正确题目",
+        description="比对ckpt中任意两个版本之间，新增加了哪些正确题目",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=__doc__
     )

@@ -1,28 +1,126 @@
 import os
-from typing import Optional
-
-from chromadb.api.types import Documents, Embeddings, EmbeddingFunction
+from typing import Any, Dict, List, Optional
 from vanna.integrations.openai import OpenAILlmService
+from vanna.tools import RunSqlTool
 from vanna.integrations.mysql import MySQLRunner
 from vanna.tools.agent_memory import SaveQuestionToolArgsTool, SearchSavedCorrectToolUsesTool, SaveTextMemoryTool
-from vanna.integrations.local.agent_memory import DemoAgentMemory
 from vanna.integrations.chromadb import ChromaAgentMemory
-from vanna.core.user import UserResolver, User, RequestContext
-
-from vanna import Agent,AgentConfig
 from vanna.core.registry import ToolRegistry
+from vanna import Agent
+from vanna.core.registry import ToolRegistry
+from vanna.tools import VisualizeDataTool
 from vanna.servers.fastapi import VannaFastAPIServer
-from vanna_hook import TGACRunSqlTool, FinalResponseSaverHook
-from vannna_tools import LightRAGQueryTool
-from openai import OpenAI
-from vanna.core.enhancer import DefaultLlmContextEnhancer
-from vanna.core.system_prompt import DefaultSystemPromptBuilder
+from vanna.core.user import UserResolver, User, RequestContext
+from vanna.core.agent import AgentConfig
+
+
+class DeepSeekClientWrapper:
+    """包装 OpenAI 客户端，在调用前修改 payload 以支持 DeepSeek Reasoner"""
+    
+    def __init__(self, original_client):
+        self._original_client = original_client
+    
+    def _prepare_messages(self, messages: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """准备消息列表，为 DeepSeek Reasoner 添加 reasoning_content 字段"""
+        prepared_messages = []
+        for msg in messages:
+            prepared_msg = dict(msg)
+            
+            # 如果是 assistant 消息，需要检查是否需要添加 reasoning_content
+            if prepared_msg.get("role") == "assistant":
+                # 如果消息中有 tool_calls 但没有 reasoning_content，需要添加
+                if "tool_calls" in prepared_msg and prepared_msg.get("tool_calls"):
+                    if "reasoning_content" not in prepared_msg:
+                        # 如果消息有 content，将其作为 reasoning_content；否则使用空字符串
+                        if "content" in prepared_msg and prepared_msg["content"]:
+                            prepared_msg["reasoning_content"] = prepared_msg["content"]
+                        else:
+                            prepared_msg["reasoning_content"] = ""
+                # 即使没有 tool_calls，如果消息是空的，也添加 reasoning_content 以避免错误
+                elif not prepared_msg.get("content") and "reasoning_content" not in prepared_msg:
+                    prepared_msg["reasoning_content"] = ""
+            
+            prepared_messages.append(prepared_msg)
+        
+        return prepared_messages
+    
+    def _patch_payload(self, kwargs: Dict[str, Any]) -> Dict[str, Any]:
+        """修补 payload，确保消息格式符合 DeepSeek Reasoner 要求"""
+        if "messages" in kwargs:
+            kwargs["messages"] = self._prepare_messages(kwargs["messages"])
+        return kwargs
+    
+    def __getattr__(self, name):
+        """代理所有其他属性访问到原始客户端"""
+        attr = getattr(self._original_client, name)
+        
+        # 如果是 chat.completions，需要包装它
+        if name == "chat":
+            return ChatWrapper(attr, self)
+        
+        return attr
+
+
+class ChatWrapper:
+    """包装 chat 对象"""
+    
+    def __init__(self, original_chat, client_wrapper):
+        self._original_chat = original_chat
+        self._client_wrapper = client_wrapper
+    
+    @property
+    def completions(self):
+        return CompletionsWrapper(self._original_chat.completions, self._client_wrapper)
+    
+    def __getattr__(self, name):
+        return getattr(self._original_chat, name)
+
+
+class CompletionsWrapper:
+    """包装 completions 对象"""
+    
+    def __init__(self, original_completions, client_wrapper):
+        self._original_completions = original_completions
+        self._client_wrapper = client_wrapper
+    
+    def create(self, **kwargs):
+        """在调用前修改 kwargs"""
+        kwargs = self._client_wrapper._patch_payload(kwargs)
+        return self._original_completions.create(**kwargs)
+    
+    def __getattr__(self, name):
+        return getattr(self._original_completions, name)
+
+
+class DeepSeekReasonerLlmService(OpenAILlmService):
+    """自定义 LLM 服务，用于处理 DeepSeek Reasoner 模型的 reasoning_content 字段要求"""
+    
+    def __init__(self, *args, **kwargs):
+        """初始化并包装客户端"""
+        super().__init__(*args, **kwargs)
+        # 延迟包装客户端，因为客户端可能在初始化后才创建
+        self._wrapped_client = None
+    
+    def __getattribute__(self, name):
+        """拦截 _client 属性访问，进行包装"""
+        if name == '_client':
+            # 获取原始客户端
+            client = super().__getattribute__('_client')
+            # 如果还没有包装，进行包装
+            if self._wrapped_client is None and not isinstance(client, DeepSeekClientWrapper):
+                self._wrapped_client = DeepSeekClientWrapper(client)
+            # 如果已经包装，返回包装后的客户端
+            if self._wrapped_client is not None:
+                return self._wrapped_client
+            return client
+        return super().__getattribute__(name)
+
 
 # Set up OpenAI GPT as your LLM
-llm = OpenAILlmService(
-    base_url="https://dashscope.aliyuncs.com/compatible-mode/v1",
-    model="qwen-plus", # qwen3-coder-flash # qwen-plus # qwen3-coder-plus-2025-09-23,
-    api_key=os.getenv("OPENAI_API_KEY")  # 从环境变量中读取
+llm = DeepSeekReasonerLlmService(
+    # base_url="https://dashscope.aliyuncs.com/compatible-mode/v1",
+    # model="qwen-plus", # qwen3-coder-flash # qwen-plus # qwen3-coder-plus-2025-09-23,
+    # api_key=os.getenv("OPENAI_API_KEY")  # 从环境变量中读取
 
     # base_url="http://127.0.0.1:1234/v1",
     # model="qwen/qwen3-4b-2507",
@@ -31,6 +129,26 @@ llm = OpenAILlmService(
     # base_url="http://127.0.0.1:8891/v1",
     # model="XGenerationLab/XiYanSQL-QwenCoder-7B-2504",
     # api_key=None
+
+    base_url="https://api.deepseek.com",
+    model="deepseek-reasoner",
+    api_key=os.getenv("OPENAI_API_KEY")
+)
+
+db_tool = RunSqlTool(
+    sql_runner=MySQLRunner(
+        host="localhost",
+        database="database_main",
+        user="root",
+        password="",
+        port=9030
+    )
+)
+
+# Set up ChromaDB for persistent agent memory
+agent_memory = ChromaAgentMemory(
+    collection_name="vanna_memory",
+    persist_directory="./chroma_db"
 )
 
 # Create a simple user resolver
@@ -40,115 +158,27 @@ class SimpleUserResolver(UserResolver):
         group = 'admin' if user_email == 'admin@example.com' else 'user'
         return User(id=user_email, email=user_email, group_memberships=[group])
 
-# Initialize the user resolver
 user_resolver = SimpleUserResolver()
 
-# Set up agent memory for learning from questions and SQL
-# agent_memory = DemoAgentMemory(max_items=10000)
-
-DASHSCOPE_EMBEDDING_MODEL = "text-embedding-v4"
-DASHSCOPE_COMPATIBLE_BASE_URL = "https://dashscope.aliyuncs.com/compatible-mode/v1"
-
-
-class DashScopeEmbeddingFunction(EmbeddingFunction[Documents]):
-    """Chroma 自定义嵌入函数，使用阿里云 DashScope OpenAI 兼容接口。"""
-
-    def __init__(
-        self,
-        *,
-        model: str = DASHSCOPE_EMBEDDING_MODEL,
-        api_key: Optional[str] = None,
-        base_url: str = DASHSCOPE_COMPATIBLE_BASE_URL,
-    ) -> None:
-        api_key = api_key or os.getenv("DASHSCOPE_API_KEY") or os.getenv("OPENAI_API_KEY")
-        if not api_key:
-            raise RuntimeError("未找到 DASHSCOPE_API_KEY 环境变量，无法调用阿里云嵌入服务。")
-
-        self._model = model
-        self._client = OpenAI(
-            api_key=api_key,
-            base_url=base_url,
-            default_headers={"X-DashScope-SSE": "disable"},
-        )
-
-    def __call__(self, input: Documents) -> Embeddings:
-        if not input:
-            return []
-
-        response = self._client.embeddings.create(
-            model=self._model,
-            input=list(input),
-        )
-        return [list(item.embedding) for item in response.data]
-
-    def get_config(self) -> dict[str, Optional[str]]:
-        return {
-            "model": self._model,
-            "api_base": DASHSCOPE_COMPATIBLE_BASE_URL,
-        }
-
-
-agent_memory = ChromaAgentMemory(
-    collection_name="vanna_tool_memory",
-    persist_directory="chroma_db",
-    embedding_function=DashScopeEmbeddingFunction(),
-)
-
-# Register tools
+# Register memory tools (they access agent_memory via ToolContext)
 tools = ToolRegistry()
+tools.register_local_tool(db_tool, access_groups=['admin', 'user'])
+tools.register_local_tool(SaveQuestionToolArgsTool(), access_groups=['admin'])
+tools.register_local_tool(SearchSavedCorrectToolUsesTool(), access_groups=['admin', 'user'])
+tools.register_local_tool(SaveTextMemoryTool(), access_groups=['admin', 'user'])
+tools.register_local_tool(VisualizeDataTool(), access_groups=['admin', 'user'])
 
-# Create db_tool
-OUTPUT_TEXT_DIR = "upload/dataset_exe_result_txt"
-
-db_tool = TGACRunSqlTool(
-    sql_runner=MySQLRunner(
-        host="localhost",
-        database="database_main",
-        user="root",
-        password="",
-        port=9030
-    ),
-    output_path="upload/dataset_exe_result.json",  # Save results immediately after SQL execution
-    output_text_dir=OUTPUT_TEXT_DIR  # Save tool outputs
+# 配置 Agent，设置最大工具迭代次数（默认是 10）
+agent_config = AgentConfig(
+    max_tool_iterations=35  # 可以根据需要调整这个值，例如 20、30 等
 )
 
-tools.register_local_tool(db_tool, access_groups=['admin', 'user'])
-# LightRAG 工具：通过 HTTP API 调用 LightRAG 服务器
-tools.register_local_tool(LightRAGQueryTool(), access_groups=['admin', 'user'])
-#tools.register_local_tool(SaveQuestionToolArgsTool(), access_groups=['admin'])
-#tools.register_local_tool(SearchSavedCorrectToolUsesTool(), access_groups=['admin', 'user'])
-#tools.register_local_tool(SaveTextMemoryTool(), access_groups=['admin', 'user'])
-
-
-class TGACSystemPromptBuilder(DefaultSystemPromptBuilder):
-    async def build_system_prompt(self, user, tools):  # type: ignore[override]
-        base_prompt = await super().build_system_prompt(user, tools)
-        extra_guidance = (
-            "\n\n=== 知识检索工具优先级 ===\n"
-            "• lightrag_query 是图+向量混合检索子代理，擅长“查资料”：\n"
-            "  - 精确定位业务概念、指标口径、schema 结构、字段关联、历史 SQL 案例等原始信息；\n"
-            "  - 不具备强逻辑推理能力，请勿让其做复杂判断或综合决策。\n"
-            "• 当需要补充事实性信息时先调用 lightrag_query，取得素材后由你负责分析与组合逻辑。\n"
-            "• 提问时聚焦业务语义与数据内容，不要额外强调 StarRocks 或底层数据库，工具会自动选择数据源。\n"
-            "• 在执行 SQL 或输出结论前，总结检索到的要点，并明确尚存的不确定性。\n"
-            "• 不准确的提问会导致不准确的回答，当返回结果不符合预期时，请更正你的描述并重新提问。\n"
-        )
-        if base_prompt:
-            return base_prompt + extra_guidance
-        return extra_guidance
-
-# Create your agent
 agent = Agent(
     llm_service=llm,
     tool_registry=tools,
     user_resolver=user_resolver,
-    lifecycle_hooks=[FinalResponseSaverHook(OUTPUT_TEXT_DIR)],
-    config=AgentConfig(
-        max_tool_iterations=100,
-    ),
     agent_memory=agent_memory,
-    llm_context_enhancer=DefaultLlmContextEnhancer(agent_memory),
-    system_prompt_builder=TGACSystemPromptBuilder(),
+    config=agent_config
 )
 
 server = VannaFastAPIServer(agent)
