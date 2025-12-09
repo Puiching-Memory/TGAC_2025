@@ -1,0 +1,97 @@
+[project]
+name = "toon_format"
+version = "0.9.0-beta.1"
+description = "A compact, human-readable serialization format designed for passing structured data to Large Language Models with significantly reduced token usage"
+readme = "README.md"
+authors = [
+    { name = "Johann Schopplich", email = "hello@johannschopplich.com" }
+]
+requires-python = ">=3.8"
+dependencies = [
+    "typing-extensions>=4.0.0; python_version < '3.10'",
+]
+license = { text = "MIT" }
+keywords = ["toon", "serialization", "llm", "data-format", "token-efficient"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
+
+[project.urls]
+Homepage = "https://github.com/toon-format/toon-python"
+Repository = "https://github.com/toon-format/toon-python"
+Documentation = "https://github.com/toon-format/spec"
+"Bug Tracker" = "https://github.com/toon-format/toon-python/issues"
+
+[project.scripts]
+toon = "toon_format.cli:main"
+
+[dependency-groups]
+benchmark = ["tiktoken>=0.4.0"]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-cov>=4.1.0",
+    "ruff>=0.8.0",
+    "mypy>=1.8.0",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_functions = ["test_*"]
+addopts = [
+    "--strict-markers",
+    "--strict-config",
+    "-ra",
+]
+
+[tool.coverage.run]
+relative_files = true
+source = ["src"]
+
+[tool.coverage.report]
+precision = 2
+show_missing = true
+skip_covered = false
+
+[tool.ruff]
+target-version = "py38"
+line-length = 100
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # pyflakes
+    "I",   # isort
+    "UP",  # pyupgrade
+]
+ignore = ["N"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+
+[tool.mypy]
+python_version = "3.9"
+warn_return_any = false
+warn_unused_configs = true
+disallow_untyped_defs = false
+check_untyped_defs = false
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/toon_format"]
