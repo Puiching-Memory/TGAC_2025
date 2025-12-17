@@ -2,6 +2,9 @@
 
 ## 赛道3：数智决策科学
 
+总队伍数：> 140
+最终排名：54
+
 name: proximusA  
 see: [upload/方案介绍.md](upload/%E6%96%B9%E6%A1%88%E4%BB%8B%E7%BB%8D.md)
 
